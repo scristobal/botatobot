@@ -37,15 +37,6 @@ func main() {
 
 	b := bot.New(token, opts...)
 
-	url, ok := os.LookupEnv("PUBLIC_URL")
-
-	if !ok {
-		log.Fatal("PUBLIC_URL not found")
-	}
-
-	b.SetWebhook(ctx, &bot.SetWebhookParams{
-		URL: url})
-
 	b.Start(ctx)
 }
 
