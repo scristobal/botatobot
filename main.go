@@ -212,9 +212,9 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 
 		b.SendPhoto(ctx, params)
 
-		docParams := &bot.SendDocumentParams{}
+		//docParams := &bot.SendDocumentParams{}
 
-		b.SendDocument(ctx, docParams)
+		//b.SendDocument(ctx, docParams)
 
 		return
 	}
