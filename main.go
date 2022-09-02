@@ -20,7 +20,7 @@ import (
 	"golang.org/x/exp/utf8string"
 )
 
-const MAGIC_WORDS = "@BotatoideBot show me "
+const MAGIC_WORDS = "@BotatoideBot"
 
 type sd_path string
 
@@ -85,44 +85,6 @@ func main() {
 	b.Start(ctx)
 }
 
-func generate(ctx context.Context, prompt string) (string, bool, error) {
-
-	lock := ctx.Value(workLockerKey("workLocker")).(*workLocker)
-
-	lock.mut.RLock()
-	if lock.working {
-		lock.mut.RUnlock()
-		return "", true, fmt.Errorf("already working")
-	} else {
-		lock.mut.RUnlock()
-	}
-
-	lock.mut.Lock()
-	lock.working = true
-	lock.mut.Unlock()
-
-	modelPath, ok := ctx.Value(sd_path("sd_path")).(string)
-
-	if !ok {
-		log.Fatal("SD_PATH not found")
-	}
-
-	outputPath := modelPath + "/outputs/txt2img-samples/" + strings.Replace(prompt, " ", "_", -1) + "/seed_27_00000.png"
-
-	args := []string{"-i", "run_sd.sh", modelPath, prompt}
-
-	cmd := exec.Command("zsh", args...)
-
-	err := cmd.Run()
-
-	lock.mut.Lock()
-	lock.working = false
-	lock.mut.Unlock()
-
-	return outputPath, false, err
-
-}
-
 func validate(prompt string) bool {
 
 	ok := utf8string.NewString(prompt).IsASCII()
@@ -131,12 +93,43 @@ func validate(prompt string) bool {
 		return false
 	}
 
-	re := regexp.MustCompile(`^[a-zA-Z0-9_ ]*$`)
+	re := regexp.MustCompile(`^[a-zA-Z0-9, ]*$`)
 
 	return re.MatchString(prompt)
 }
 
+func getPrompt(msg string) (string, error) {
+
+	prompt := strings.Replace(msg, MAGIC_WORDS, "", -1)
+
+	ok := validate(prompt)
+
+	if !ok {
+		return "", fmt.Errorf("invalid characters in prompt")
+	}
+
+	return prompt, nil
+}
+
 func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
+
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("Recovered in f", r)
+		}
+	}()
+
+	modelPath, ok := ctx.Value(sd_path("sd_path")).(string)
+
+	if !ok {
+		log.Fatal("SD_PATH not found")
+	}
+
+	lock, ok := ctx.Value(workLockerKey("workLocker")).(*workLocker)
+
+	if !ok {
+		log.Fatal("workLocker not found")
+	}
 
 	chatId := update.Message.Chat.ID
 	message := update.Message.Text
@@ -144,32 +137,49 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 
 	if strings.HasPrefix(message, MAGIC_WORDS) {
 
-		messageBody := strings.Replace(message, MAGIC_WORDS, "", -1)
+		prompt, ok := getPrompt(message)
 
-		prompt := strings.Replace(messageBody, `"`, "", -1)
-
-		ok := validate(prompt)
-
-		if !ok {
+		if ok != nil {
 			b.SendMessage(ctx, &bot.SendMessageParams{
 				ChatID: chatId,
-				Text:   "good try, no funny business, only ASCII. ML-injection is not allowed 😬"})
+				Text:   "Sorry your prompt is somehow invalid 😬"})
+			fmt.Println("Invalid prompt from", user)
 			return
 		}
 
 		fmt.Printf("User %s requested %s \n", user, prompt)
 
-		path, wasBusy, err := generate(ctx, prompt)
-
-		if wasBusy {
-
+		lock.mut.RLock()
+		if lock.working {
+			lock.mut.RUnlock()
 			b.SendMessage(ctx,
 				&bot.SendMessageParams{
 					ChatID: chatId,
 					Text:   "I can only generate one image at a time 🐢, try again later",
 				})
+			fmt.Println("User", user, "tried to generate an image while another one was being generated")
 			return
 		}
+		lock.mut.RUnlock()
+
+		b.SendMessage(ctx,
+			&bot.SendMessageParams{ChatID: chatId,
+				Text: fmt.Sprintf("Got it! Generating %s for %s\n", prompt, user),
+			})
+
+		lock.mut.Lock()
+		lock.working = true
+		lock.mut.Unlock()
+
+		args := []string{"-i", "run_sd.sh", modelPath, prompt}
+
+		cmd := exec.Command("zsh", args...)
+
+		err := cmd.Run()
+
+		lock.mut.Lock()
+		lock.working = false
+		lock.mut.Unlock()
 
 		if err != nil {
 			fmt.Println("Failed to run the model")
@@ -182,14 +192,17 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 			return
 		}
 
-		b.SendMessage(ctx,
-			&bot.SendMessageParams{ChatID: chatId,
-				Text: fmt.Sprintf("Got it! Generating %s for %s  \n", prompt, user),
-			})
+		folderName := strings.Replace(prompt, " ", "_", -1)
 
-		fmt.Println("Success. Sending file: ", path)
+		if len(folderName) > 126 {
+			folderName = folderName[:126]
+		}
 
-		fileContent, _ := os.ReadFile(path)
+		outputPath := modelPath + "/outputs/txt2img-samples/" + folderName + "/seed_27_00000.png"
+
+		fmt.Println("Success. Sending file: ", outputPath)
+
+		fileContent, _ := os.ReadFile(outputPath)
 
 		params := &bot.SendPhotoParams{
 			ChatID:  chatId,
@@ -198,13 +211,19 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 		}
 
 		b.SendPhoto(ctx, params)
+
+		docParams := &bot.SendDocumentParams{}
+
+		b.SendDocument(ctx, docParams)
+
+		return
 	}
 
-	if strings.HasPrefix(message, "@BotatoideBot") {
+	if strings.Contains(message, "@BotatoideBot") {
 
 		b.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID: chatId,
-			Text:   "Hi! I'm a 🤖 that generates images from text. Just mention me in a message like this: \n\n @BotatoideBot show me a cat \n\n and I'll generate an image for you!",
+			Text:   "Hi! I'm a 🤖 that generates images from text. Just mention me follow by a prompt, like this: \n\n @BotatoideBot a cat in space \n\n and I'll generate an image for you!",
 		})
 	}
 
