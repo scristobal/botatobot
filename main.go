@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
@@ -19,7 +20,7 @@ import (
 	"golang.org/x/exp/utf8string"
 )
 
-const MAGIC_WORDS = "@BotatoideBot show me"
+const MAGIC_WORDS = "@BotatoideBot show me "
 
 type sd_path string
 
@@ -51,6 +52,13 @@ func (c *config) load() {
 	c.path = path
 }
 
+type workLockerKey string
+
+type workLocker struct {
+	working bool
+	mut     sync.RWMutex
+}
+
 func main() {
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
@@ -68,12 +76,30 @@ func main() {
 
 	ctx = context.WithValue(ctx, sd_path("sd_path"), c.path)
 
+	lock := &workLocker{working: false}
+
+	ctx = context.WithValue(ctx, workLockerKey("workLocker"), lock)
+
 	fmt.Println("Config loaded. Bot is running")
 
 	b.Start(ctx)
 }
 
-func generate(ctx context.Context, prompt string) (string, error) {
+func generate(ctx context.Context, prompt string) (string, bool, error) {
+
+	lock := ctx.Value(workLockerKey("workLocker")).(*workLocker)
+
+	lock.mut.RLock()
+	if lock.working {
+		lock.mut.RUnlock()
+		return "", true, fmt.Errorf("already working")
+	} else {
+		lock.mut.RUnlock()
+	}
+
+	lock.mut.Lock()
+	lock.working = true
+	lock.mut.Unlock()
 
 	modelPath, ok := ctx.Value(sd_path("sd_path")).(string)
 
@@ -89,7 +115,11 @@ func generate(ctx context.Context, prompt string) (string, error) {
 
 	err := cmd.Run()
 
-	return outputPath, err
+	lock.mut.Lock()
+	lock.working = false
+	lock.mut.Unlock()
+
+	return outputPath, false, err
 
 }
 
@@ -127,14 +157,19 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 			return
 		}
 
-		b.SendMessage(ctx,
-			&bot.SendMessageParams{ChatID: chatId,
-				Text: fmt.Sprintf("Got it! Generating %s for %s  \n", prompt, user),
-			})
+		fmt.Printf("User %s requested %s \n", user, prompt)
 
-		fmt.Printf("Generating a %s for %s \n", prompt, user)
+		path, wasBusy, err := generate(ctx, prompt)
 
-		path, err := generate(ctx, prompt)
+		if wasBusy {
+
+			b.SendMessage(ctx,
+				&bot.SendMessageParams{
+					ChatID: chatId,
+					Text:   "I can only generate one image at a time 🐢, try again later",
+				})
+			return
+		}
 
 		if err != nil {
 			fmt.Println("Failed to run the model")
@@ -147,7 +182,12 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 			return
 		}
 
-		fmt.Println("Sending file: ", path)
+		b.SendMessage(ctx,
+			&bot.SendMessageParams{ChatID: chatId,
+				Text: fmt.Sprintf("Got it! Generating %s for %s  \n", prompt, user),
+			})
+
+		fmt.Println("Success. Sending file: ", path)
 
 		fileContent, _ := os.ReadFile(path)
 
