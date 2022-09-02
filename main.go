@@ -1,32 +1,38 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"os/signal"
+	"regexp"
+	"strings"
 
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 
 	"github.com/joho/godotenv"
+
+	"golang.org/x/exp/utf8string"
 )
 
-// Send any text message to the bot after the bot has been started
+const MAGIC_WORDS = "@BotatoideBot show me"
 
-func main() {
+type sd_path string
 
+type config struct {
+	token string
+	path  string
+}
+
+func (c *config) load() {
 	err := godotenv.Load()
 
 	if err != nil {
-		log.Fatal("Error loading .env file")
-	}
-
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
-	defer cancel()
-
-	opts := []bot.Option{
-		bot.WithDefaultHandler(handler),
+		fmt.Println("Error loading .env file, fallback on env vars")
 	}
 
 	token, ok := os.LookupEnv("BOT_TOKEN")
@@ -35,15 +41,131 @@ func main() {
 		log.Fatal("BOT_TOKEN not found")
 	}
 
-	b := bot.New(token, opts...)
+	path, ok := os.LookupEnv("SD_PATH")
+
+	if !ok {
+		log.Fatal("SD_PATH not found")
+	}
+
+	c.token = token
+	c.path = path
+}
+
+func main() {
+
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer cancel()
+
+	c := config{}
+
+	c.load()
+
+	opts := []bot.Option{
+		bot.WithDefaultHandler(handler),
+	}
+
+	b := bot.New(c.token, opts...)
+
+	ctx = context.WithValue(ctx, sd_path("sd_path"), c.path)
+
+	fmt.Println("Config loaded. Bot is running")
 
 	b.Start(ctx)
 }
 
+func generate(ctx context.Context, prompt string) (string, error) {
+
+	modelPath, ok := ctx.Value(sd_path("sd_path")).(string)
+
+	if !ok {
+		log.Fatal("SD_PATH not found")
+	}
+
+	outputPath := modelPath + "/outputs/txt2img-samples/" + strings.Replace(prompt, " ", "_", -1) + "/seed_27_00000.png"
+
+	args := []string{"-i", "run_sd.sh", modelPath, prompt}
+
+	cmd := exec.Command("zsh", args...)
+
+	err := cmd.Run()
+
+	return outputPath, err
+
+}
+
+func validate(prompt string) bool {
+
+	ok := utf8string.NewString(prompt).IsASCII()
+
+	if !ok {
+		return false
+	}
+
+	re := regexp.MustCompile(`^[a-zA-Z0-9_ ]*$`)
+
+	return re.MatchString(prompt)
+}
+
 func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 
-	b.SendMessage(ctx, &bot.SendMessageParams{
-		ChatID: update.Message.Chat.ID,
-		Text:   update.Message.Text,
-	})
+	chatId := update.Message.Chat.ID
+	message := update.Message.Text
+	user := update.Message.From.Username
+
+	if strings.HasPrefix(message, MAGIC_WORDS) {
+
+		messageBody := strings.Replace(message, MAGIC_WORDS, "", -1)
+
+		prompt := strings.Replace(messageBody, `"`, "", -1)
+
+		ok := validate(prompt)
+
+		if !ok {
+			b.SendMessage(ctx, &bot.SendMessageParams{
+				ChatID: chatId,
+				Text:   "good try, no funny business, only ASCII. ML-injection is not allowed 😬"})
+			return
+		}
+
+		b.SendMessage(ctx,
+			&bot.SendMessageParams{ChatID: chatId,
+				Text: fmt.Sprintf("Got it! Generating %s for %s  \n", prompt, user),
+			})
+
+		fmt.Printf("Generating a %s for %s \n", prompt, user)
+
+		path, err := generate(ctx, prompt)
+
+		if err != nil {
+			fmt.Println("Failed to run the model")
+
+			b.SendMessage(ctx, &bot.SendMessageParams{
+				ChatID: chatId,
+				Text:   string("Something went wrong when running the model 😭 "),
+			})
+
+			return
+		}
+
+		fmt.Println("Sending file: ", path)
+
+		fileContent, _ := os.ReadFile(path)
+
+		params := &bot.SendPhotoParams{
+			ChatID:  chatId,
+			Photo:   &models.InputFileUpload{Filename: "image.png", Data: bytes.NewReader(fileContent)},
+			Caption: fmt.Sprintf("%s by %s", prompt, user),
+		}
+
+		b.SendPhoto(ctx, params)
+	}
+
+	if strings.HasPrefix(message, "@BotatoideBot") {
+
+		b.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID: chatId,
+			Text:   "Hi! I'm a 🤖 that generates images from text. Just mention me in a message like this: \n\n @BotatoideBot show me a cat \n\n and I'll generate an image for you!",
+		})
+	}
+
 }
