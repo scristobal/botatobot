@@ -89,6 +89,8 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
+	log.Println("Loading configuration...")
+
 	err := configure()
 
 	if err != nil {
@@ -101,7 +103,7 @@ func main() {
 
 	b := bot.New(BOT_TOKEN, opts...)
 
-	log.Println("Config loaded. Bot is running")
+	log.Println("Initializing job queue...")
 
 	go func() {
 		for {
@@ -124,6 +126,8 @@ func main() {
 			}
 		}
 	}()
+
+	log.Println("Starting bot...")
 
 	b.Start(ctx)
 
