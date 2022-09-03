@@ -165,8 +165,6 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 		lock.working = true
 		lock.mut.Unlock()
 
-		fmt.Println(SCRIPT_PATH)
-
 		args := []string{"-i", SCRIPT_PATH, prompt}
 
 		cmd := exec.Command("zsh", args...)
@@ -194,7 +192,7 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 			folderName = folderName[:126]
 		}
 
-		outputPath := SCRIPT_PATH + "/outputs/txt2img-samples/" + folderName + "/seed_27_00000.png"
+		outputPath := strings.ReplaceAll(SCRIPT_PATH, "/run_sd.sh", "") + "/outputs/txt2img-samples/" + folderName + "/seed_27_00000.png"
 
 		fmt.Println("Success. Sending file: ", outputPath)
 
