@@ -19,3 +19,6 @@
 
 # logs
 logs/
+
+# editors
+.vscode/
