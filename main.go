@@ -29,9 +29,10 @@ var (
 const MAX_JOBS = 10
 
 type job struct {
-	chatID int
+	chatId int
 	prompt string
-	User   string
+	user   string
+	userId int
 }
 
 var jobQueue = make(chan job, MAX_JOBS)
@@ -138,6 +139,10 @@ func getPrompt(msg string) (string, error) {
 	return prompt, nil
 }
 
+func mention(name string, id int) string {
+	return fmt.Sprintf("[%s](tg://user?id=%d)", name, id)
+}
+
 func processJobs(job job) jobResult {
 
 	args := []string{"-i", SCRIPT_PATH, job.prompt}
@@ -172,8 +177,8 @@ func resolveJob(ctx context.Context, b *bot.Bot, result jobResult) {
 		log.Println("Failed to run the model")
 
 		b.SendMessage(ctx, &bot.SendMessageParams{
-			ChatID: result.job.chatID,
-			Text:   fmt.Sprintf("Something went wrong when running the prompt %s for %s 😭", result.job.prompt, result.job.User),
+			ChatID: result.job.chatId,
+			Text:   fmt.Sprintf("Sorry %s, something went wrong when running the model 😭", mention(result.job.user, result.job.userId)),
 		})
 
 		return
@@ -184,12 +189,17 @@ func resolveJob(ctx context.Context, b *bot.Bot, result jobResult) {
 	fileContent, _ := os.ReadFile(result.output)
 
 	params := &bot.SendPhotoParams{
-		ChatID:  result.job.chatID,
-		Photo:   &models.InputFileUpload{Filename: "image.png", Data: bytes.NewReader(fileContent)},
-		Caption: fmt.Sprintf("%s by %s", result.job.prompt, result.job.User),
+		ChatID: result.job.chatId,
+		Photo:  &models.InputFileUpload{Filename: "image.png", Data: bytes.NewReader(fileContent)},
 	}
 
 	b.SendPhoto(ctx, params)
+
+	b.SendMessage(ctx, &bot.SendMessageParams{
+		ChatID:    result.job.chatId,
+		Text:      fmt.Sprintf("%s by %s", result.job.prompt, mention(result.job.user, result.job.userId)),
+		ParseMode: "Markdown",
+	})
 
 }
 
@@ -204,6 +214,7 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 	chatId := update.Message.Chat.ID
 	message := update.Message.Text
 	user := update.Message.From.Username
+	userId := update.Message.From.ID
 
 	if strings.HasPrefix(message, MAGIC_WORDS) {
 
@@ -211,8 +222,10 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 
 		if ok != nil {
 			b.SendMessage(ctx, &bot.SendMessageParams{
-				ChatID: chatId,
-				Text:   "Sorry your prompt is somehow invalid 😬"})
+				ChatID:    chatId,
+				Text:      fmt.Sprintf("Sorry %s your prompt is somehow invalid 😬", mention(user, userId)),
+				ParseMode: "Markdown",
+			})
 			log.Println("Invalid prompt from", user)
 			return
 		}
@@ -222,8 +235,9 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 		if len(jobQueue) >= MAX_JOBS {
 			b.SendMessage(ctx,
 				&bot.SendMessageParams{
-					ChatID: chatId,
-					Text:   "The job queue reached its maximum, try again later 🙄",
+					ChatID:    chatId,
+					Text:      fmt.Sprintf("Sorry %s, the job queue reached its maximum, try again later 🙄", mention(user, userId)),
+					ParseMode: "Markdown",
 				})
 
 			log.Println("User", user, "request rejected, queue full")
@@ -232,13 +246,14 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 
 		b.SendMessage(ctx,
 			&bot.SendMessageParams{
-				ChatID: chatId,
-				Text:   fmt.Sprintf("%s, your request is being processed 🤖", user),
+				ChatID:    chatId,
+				Text:      fmt.Sprintf("%s, your request is being processed 🤖", mention(user, userId)),
+				ParseMode: "Markdown",
 			})
 
 		log.Println("User", user, "request accepted")
 
-		jobQueue <- job{chatID: chatId, prompt: prompt, User: user}
+		jobQueue <- job{chatId: chatId, prompt: prompt, user: user, userId: userId}
 
 		return
 	}
