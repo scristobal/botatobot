@@ -35,6 +35,7 @@ type job struct {
 	prompt string
 	user   string
 	userId int
+	msgId  int
 	id     string
 }
 
@@ -141,14 +142,33 @@ func validate(prompt string) bool {
 		return false
 	}
 
-	re := regexp.MustCompile(`^[a-zA-Z0-9, ]*$`)
+	re := regexp.MustCompile(`^[\w\d\s]*$`)
 
 	return re.MatchString(prompt)
 }
 
+func clean(msg string) string {
+	msg = strings.ReplaceAll(msg, BOT_USERNAME, "")
+
+	msg = strings.ReplaceAll(msg, "\"", "")
+
+	msg = strings.ReplaceAll(msg, ",", " ")
+
+	msg = strings.ReplaceAll(msg, "_", " ")
+
+	msg = strings.ReplaceAll(msg, "/", " ")
+
+	msg = strings.TrimSpace(msg)
+
+	reg := regexp.MustCompile(`\s+`)
+	msg = reg.ReplaceAllString(msg, " ")
+
+	return msg
+}
+
 func getPrompt(msg string) (string, error) {
 
-	prompt := strings.Replace(msg, BOT_USERNAME, "", -1)
+	prompt := clean(msg)
 
 	ok := validate(prompt)
 
@@ -159,7 +179,7 @@ func getPrompt(msg string) (string, error) {
 	return prompt, nil
 }
 
-func mention(name string, id int) string {
+func Mention(name string, id int) string {
 	return fmt.Sprintf("[%s](tg://user?id=%d)", name, id)
 }
 
@@ -205,8 +225,9 @@ func resolveJob(ctx context.Context, b *bot.Bot, result jobResult) {
 		log.Println("Failed to run the model")
 
 		b.SendMessage(ctx, &bot.SendMessageParams{
-			ChatID: result.job.chatId,
-			Text:   fmt.Sprintf("Sorry %s, something went wrong when running the model 😭", mention(result.job.user, result.job.userId)),
+			ChatID:           result.job.chatId,
+			Text:             "Sorry, but something went wrong when running the model 😭",
+			ReplyToMessageID: result.job.msgId,
 		})
 
 		return
@@ -230,13 +251,9 @@ func resolveJob(ctx context.Context, b *bot.Bot, result jobResult) {
 		ChatID:              result.job.chatId,
 		Media:               media,
 		DisableNotification: true,
+		ReplyToMessageID:    result.job.msgId,
 	})
 
-	b.SendMessage(ctx, &bot.SendMessageParams{
-		ChatID:    result.job.chatId,
-		Text:      fmt.Sprintf("%s by %s", result.job.prompt, mention(result.job.user, result.job.userId)),
-		ParseMode: "Markdown",
-	})
 }
 
 func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
@@ -248,22 +265,26 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 	}()
 
 	chatId := update.Message.Chat.ID
+
 	message := update.Message.Text
+	messageId := update.Message.ID
+
 	user := update.Message.From.Username
 	userId := update.Message.From.ID
+
 	id := uuid.New()
 
 	if strings.HasPrefix(message, BOT_USERNAME) {
 
-		prompt, ok := getPrompt(message)
+		prompt, err := getPrompt(message)
 
-		if ok != nil {
+		if err != nil {
 			b.SendMessage(ctx, &bot.SendMessageParams{
-				ChatID:    chatId,
-				Text:      fmt.Sprintf("Sorry %s your prompt is somehow invalid 😬", mention(user, userId)),
-				ParseMode: "Markdown",
+				ChatID:           chatId,
+				Text:             "Sorry, but your prompt is somehow invalid 😬",
+				ReplyToMessageID: messageId,
 			})
-			log.Println("Invalid prompt from", user)
+			log.Printf("Invalid prompt from %s: %s", user, err)
 			return
 		}
 
@@ -272,9 +293,9 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 		if len(jobQueue) >= MAX_JOBS {
 			b.SendMessage(ctx,
 				&bot.SendMessageParams{
-					ChatID:    chatId,
-					Text:      fmt.Sprintf("Sorry %s, the job queue reached its maximum, try again later 🙄", mention(user, userId)),
-					ParseMode: "Markdown",
+					ChatID:           chatId,
+					Text:             "Sorry, but the job queue reached its maximum, try again later 🙄",
+					ReplyToMessageID: messageId,
 				})
 
 			log.Println("User", user, "request rejected, queue full")
@@ -283,14 +304,15 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 
 		b.SendMessage(ctx,
 			&bot.SendMessageParams{
-				ChatID:    chatId,
-				Text:      fmt.Sprintf("%s, your request is being processed 🤖", mention(user, userId)),
-				ParseMode: "Markdown",
+				ChatID:              chatId,
+				Text:                "Your request is being processed 🤖",
+				ReplyToMessageID:    messageId,
+				DisableNotification: true,
 			})
 
 		log.Println("User", user, "request accepted")
 
-		jobQueue <- job{chatId: chatId, prompt: prompt, user: user, userId: userId, id: id.String()}
+		jobQueue <- job{chatId: chatId, prompt: prompt, user: user, userId: userId, msgId: messageId, id: id.String()}
 
 		return
 	}
