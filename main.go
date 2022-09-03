@@ -10,7 +10,6 @@ import (
 	"os/signal"
 	"regexp"
 	"strings"
-	"sync"
 
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
@@ -27,6 +26,24 @@ var (
 	SCRIPT_PATH string
 )
 
+const MAX_JOBS = 10
+
+type job struct {
+	chatID int
+	prompt string
+	User   string
+}
+
+var jobQueue = make(chan job, MAX_JOBS)
+
+type jobResult struct {
+	job    job
+	err    error
+	output string
+}
+
+var jobResults = make(chan jobResult, MAX_JOBS)
+
 func configure() error {
 	err := godotenv.Load()
 	var ok bool
@@ -39,7 +56,6 @@ func configure() error {
 
 	if !ok {
 		return fmt.Errorf("BOT_TOKEN not found")
-
 	}
 
 	SCRIPT_PATH, ok = os.LookupEnv("MODEL_PATH")
@@ -50,13 +66,6 @@ func configure() error {
 
 	return nil
 
-}
-
-type workLockerKey string
-
-type workLocker struct {
-	working bool
-	mut     sync.RWMutex
 }
 
 func main() {
@@ -76,11 +85,29 @@ func main() {
 
 	b := bot.New(BOT_TOKEN, opts...)
 
-	lock := &workLocker{working: false}
-
-	ctx = context.WithValue(ctx, workLockerKey("workLocker"), lock)
-
 	fmt.Println("Config loaded. Bot is running")
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case job := <-jobQueue:
+				jobResults <- processJobs(job)
+			}
+		}
+	}()
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case result := <-jobResults:
+				resolveJob(ctx, b, result)
+			}
+		}
+	}()
 
 	b.Start(ctx)
 }
@@ -111,6 +138,62 @@ func getPrompt(msg string) (string, error) {
 	return prompt, nil
 }
 
+func processJobs(job job) jobResult {
+
+	args := []string{"-i", SCRIPT_PATH, job.prompt}
+
+	cmd := exec.Command("zsh", args...)
+
+	var out bytes.Buffer
+	cmd.Stdout = &out
+
+	err := cmd.Run()
+
+	if err != nil {
+		log.Printf("Error running script: %v", err)
+		return jobResult{job: job, err: err}
+
+	}
+
+	folderName := strings.Replace(job.prompt, " ", "_", -1)
+
+	if len(folderName) > 126 {
+		folderName = folderName[:126]
+	}
+
+	outputPath := strings.ReplaceAll(SCRIPT_PATH, "/run_sd.sh", "") + "/outputs/txt2img-samples/" + folderName + "/seed_27_00000.png"
+
+	fmt.Println("Success. Sending file: ", outputPath)
+	return jobResult{job: job, output: outputPath}
+}
+
+func resolveJob(ctx context.Context, b *bot.Bot, result jobResult) {
+
+	if result.err != nil {
+		fmt.Println("Failed to run the model")
+
+		b.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID: result.job.chatID,
+			Text:   string("Something went wrong when running the model 😭 "),
+		})
+
+		return
+	}
+
+	fmt.Println("Success. Sending file: ", result.output)
+
+	fileContent, _ := os.ReadFile(result.output)
+
+	params := &bot.SendPhotoParams{
+		ChatID:  result.job.chatID,
+		Photo:   &models.InputFileUpload{Filename: "image.png", Data: bytes.NewReader(fileContent)},
+		Caption: fmt.Sprintf("%s by %s", result.job.prompt, result.job.User),
+	}
+
+	b.SendPhoto(ctx, params)
+
+}
+
 func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 
 	defer func() {
@@ -118,12 +201,6 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 			fmt.Println("Recovered in f", r)
 		}
 	}()
-
-	lock, ok := ctx.Value(workLockerKey("workLocker")).(*workLocker)
-
-	if !ok {
-		log.Fatal("workLocker not found")
-	}
 
 	chatId := update.Message.Chat.ID
 	message := update.Message.Text
@@ -143,72 +220,26 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 
 		fmt.Printf("User %s requested %s \n", user, prompt)
 
-		lock.mut.RLock()
-		if lock.working {
-			lock.mut.RUnlock()
+		if len(jobQueue) >= MAX_JOBS {
 			b.SendMessage(ctx,
 				&bot.SendMessageParams{
 					ChatID: chatId,
-					Text:   "I can only generate one image at a time 🐢, try again later",
+					Text:   "The job queue reached its maximum, try again later 🙄",
 				})
-			fmt.Println("User", user, "tried to generate an image while another one was being generated")
+
+			fmt.Println("User", user, "request rejected, queue full")
 			return
 		}
-		lock.mut.RUnlock()
 
 		b.SendMessage(ctx,
-			&bot.SendMessageParams{ChatID: chatId,
-				Text: fmt.Sprintf("Got it! Generating %s for %s\n", prompt, user),
-			})
-
-		lock.mut.Lock()
-		lock.working = true
-		lock.mut.Unlock()
-
-		args := []string{"-i", SCRIPT_PATH, prompt}
-
-		cmd := exec.Command("zsh", args...)
-
-		err := cmd.Run()
-
-		lock.mut.Lock()
-		lock.working = false
-		lock.mut.Unlock()
-
-		if err != nil {
-			fmt.Println("Failed to run the model")
-
-			b.SendMessage(ctx, &bot.SendMessageParams{
+			&bot.SendMessageParams{
 				ChatID: chatId,
-				Text:   string("Something went wrong when running the model 😭 "),
+				Text:   fmt.Sprintf("%s, your request is being processed 🤖", user),
 			})
 
-			return
-		}
+		fmt.Println("User", user, "request accepted")
 
-		folderName := strings.Replace(prompt, " ", "_", -1)
-
-		if len(folderName) > 126 {
-			folderName = folderName[:126]
-		}
-
-		outputPath := strings.ReplaceAll(SCRIPT_PATH, "/run_sd.sh", "") + "/outputs/txt2img-samples/" + folderName + "/seed_27_00000.png"
-
-		fmt.Println("Success. Sending file: ", outputPath)
-
-		fileContent, _ := os.ReadFile(outputPath)
-
-		params := &bot.SendPhotoParams{
-			ChatID:  chatId,
-			Photo:   &models.InputFileUpload{Filename: "image.png", Data: bytes.NewReader(fileContent)},
-			Caption: fmt.Sprintf("%s by %s", prompt, user),
-		}
-
-		b.SendPhoto(ctx, params)
-
-		//docParams := &bot.SendDocumentParams{}
-
-		//b.SendDocument(ctx, docParams)
+		jobQueue <- job{chatID: chatId, prompt: prompt, User: user}
 
 		return
 	}
