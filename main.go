@@ -246,6 +246,7 @@ func resolveJob(ctx context.Context, b *bot.Bot, result jobResult) {
 		media = append(media, &models.InputMediaPhoto{
 			Media:           fmt.Sprintf("attach://%s", output),
 			MediaAttachment: bytes.NewReader(fileContent),
+			Caption:         result.job.prompt,
 		})
 	}
 
