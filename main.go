@@ -42,9 +42,9 @@ type job struct {
 var jobQueue = make(chan job, MAX_JOBS)
 
 type jobResult struct {
-	job    job
-	err    error
-	output string
+	job     job
+	err     error
+	outputs []string
 }
 
 var jobResults = make(chan jobResult, MAX_JOBS)
@@ -172,19 +172,19 @@ func processJobs(job job) jobResult {
 
 	}
 
-	var outputPath string
+	var outputPath []string
 
 	filepath.Walk(outputFolder, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 		if !info.IsDir() {
-			outputPath = path
+			outputPath = append(outputPath, path)
 		}
 		return nil
 	})
 
-	return jobResult{job: job, output: outputPath}
+	return jobResult{job: job, outputs: outputPath}
 }
 
 func resolveJob(ctx context.Context, b *bot.Bot, result jobResult) {
@@ -200,23 +200,29 @@ func resolveJob(ctx context.Context, b *bot.Bot, result jobResult) {
 		return
 	}
 
-	log.Println("Success. Sending file: ", result.output)
+	log.Println("Success. Sending files from: ", result.job.id)
 
-	fileContent, _ := os.ReadFile(result.output)
+	var media []models.InputMedia
 
-	params := &bot.SendPhotoParams{
-		ChatID: result.job.chatId,
-		Photo:  &models.InputFileUpload{Filename: "image.png", Data: bytes.NewReader(fileContent)},
+	for _, output := range result.outputs {
+
+		fileContent, _ := os.ReadFile(output)
+
+		media = append(media, &models.InputMediaPhoto{
+			Media:           fmt.Sprintf("attach://%s", output),
+			MediaAttachment: bytes.NewReader(fileContent),
+		})
 	}
 
-	b.SendPhoto(ctx, params)
+	b.SendMediaGroup(ctx, &bot.SendMediaGroupParams{
+		ChatID: result.job.chatId,
+		Media:  media})
 
 	b.SendMessage(ctx, &bot.SendMessageParams{
 		ChatID:    result.job.chatId,
 		Text:      fmt.Sprintf("%s by %s", result.job.prompt, mention(result.job.user, result.job.userId)),
 		ParseMode: "Markdown",
 	})
-
 }
 
 func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
