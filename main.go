@@ -21,12 +21,11 @@ import (
 	"golang.org/x/exp/utf8string"
 )
 
-const MAGIC_WORDS = "@BotatoideBot"
-
 var (
-	BOT_TOKEN   string
-	MODEL_PATH  string
-	OUTPUT_PATH string
+	BOT_TOKEN    string
+	BOT_USERNAME string
+	MODEL_PATH   string
+	OUTPUT_PATH  string
 )
 
 const MAX_JOBS = 10
@@ -61,6 +60,12 @@ func configure() error {
 
 	if !ok {
 		return fmt.Errorf("BOT_TOKEN not found")
+	}
+
+	BOT_USERNAME, ok = os.LookupEnv("BOT_USERNAME")
+
+	if !ok {
+		return fmt.Errorf("BOT_USERNAME not found")
 	}
 
 	MODEL_PATH, ok = os.LookupEnv("MODEL_PATH")
@@ -121,6 +126,7 @@ func main() {
 	}()
 
 	b.Start(ctx)
+
 }
 
 func validate(prompt string) bool {
@@ -138,7 +144,7 @@ func validate(prompt string) bool {
 
 func getPrompt(msg string) (string, error) {
 
-	prompt := strings.Replace(msg, MAGIC_WORDS, "", -1)
+	prompt := strings.Replace(msg, BOT_USERNAME, "", -1)
 
 	ok := validate(prompt)
 
@@ -241,7 +247,7 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 	userId := update.Message.From.ID
 	id := uuid.New()
 
-	if strings.HasPrefix(message, MAGIC_WORDS) {
+	if strings.HasPrefix(message, BOT_USERNAME) {
 
 		prompt, ok := getPrompt(message)
 
@@ -283,7 +289,7 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 		return
 	}
 
-	if strings.HasPrefix(message, MAGIC_WORDS+" /help") {
+	if strings.HasPrefix(message, fmt.Sprintf("/start %s", BOT_USERNAME)) {
 
 		b.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID: chatId,
@@ -291,7 +297,7 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 		})
 	}
 
-	if strings.HasPrefix(message, MAGIC_WORDS+" /queue") {
+	if strings.HasPrefix(message, fmt.Sprintf("/queue %s", BOT_USERNAME)) {
 
 		b.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID: chatId,
