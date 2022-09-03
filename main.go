@@ -49,7 +49,7 @@ func configure() error {
 	var ok bool
 
 	if err != nil {
-		fmt.Println("Failed to load .env file, fallback on env vars")
+		log.Println("Failed to load .env file, fallback on env vars")
 	}
 
 	BOT_TOKEN, ok = os.LookupEnv("BOT_TOKEN")
@@ -85,7 +85,7 @@ func main() {
 
 	b := bot.New(BOT_TOKEN, opts...)
 
-	fmt.Println("Config loaded. Bot is running")
+	log.Println("Config loaded. Bot is running")
 
 	go func() {
 		for {
@@ -163,24 +163,23 @@ func processJobs(job job) jobResult {
 
 	outputPath := strings.ReplaceAll(SCRIPT_PATH, "/run_sd.sh", "") + "/outputs/txt2img-samples/" + folderName + "/seed_27_00000.png"
 
-	fmt.Println("Success. Sending file: ", outputPath)
 	return jobResult{job: job, output: outputPath}
 }
 
 func resolveJob(ctx context.Context, b *bot.Bot, result jobResult) {
 
 	if result.err != nil {
-		fmt.Println("Failed to run the model")
+		log.Println("Failed to run the model")
 
 		b.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID: result.job.chatID,
-			Text:   string("Something went wrong when running the model 😭 "),
+			Text:   fmt.Sprintf("Something went wrong when running the prompt %s for %s 😭", result.job.prompt, result.job.User),
 		})
 
 		return
 	}
 
-	fmt.Println("Success. Sending file: ", result.output)
+	log.Println("Success. Sending file: ", result.output)
 
 	fileContent, _ := os.ReadFile(result.output)
 
@@ -198,7 +197,7 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Println("Recovered in f", r)
+			log.Println("Recovered in f", r)
 		}
 	}()
 
@@ -214,11 +213,11 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 			b.SendMessage(ctx, &bot.SendMessageParams{
 				ChatID: chatId,
 				Text:   "Sorry your prompt is somehow invalid 😬"})
-			fmt.Println("Invalid prompt from", user)
+			log.Println("Invalid prompt from", user)
 			return
 		}
 
-		fmt.Printf("User %s requested %s \n", user, prompt)
+		log.Printf("User %s requested %s \n", user, prompt)
 
 		if len(jobQueue) >= MAX_JOBS {
 			b.SendMessage(ctx,
@@ -227,7 +226,7 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 					Text:   "The job queue reached its maximum, try again later 🙄",
 				})
 
-			fmt.Println("User", user, "request rejected, queue full")
+			log.Println("User", user, "request rejected, queue full")
 			return
 		}
 
@@ -237,18 +236,26 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 				Text:   fmt.Sprintf("%s, your request is being processed 🤖", user),
 			})
 
-		fmt.Println("User", user, "request accepted")
+		log.Println("User", user, "request accepted")
 
 		jobQueue <- job{chatID: chatId, prompt: prompt, User: user}
 
 		return
 	}
 
-	if strings.Contains(message, "@BotatoideBot") {
+	if strings.HasPrefix(message, MAGIC_WORDS+" /help") {
 
 		b.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID: chatId,
 			Text:   "Hi! I'm a 🤖 that generates images from text. Just mention me follow by a prompt, like this: \n\n @BotatoideBot a cat in space \n\n and I'll generate an image for you!",
+		})
+	}
+
+	if strings.HasPrefix(message, MAGIC_WORDS+" /queue") {
+
+		b.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID: chatId,
+			Text:   fmt.Sprintf("The queue has %d jobs", len(jobQueue)),
 		})
 	}
 
