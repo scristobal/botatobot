@@ -25,7 +25,7 @@ const MAGIC_WORDS = "@BotatoideBot"
 
 var (
 	BOT_TOKEN   string
-	SCRIPT_PATH string
+	MODEL_PATH  string
 	OUTPUT_PATH string
 )
 
@@ -63,7 +63,7 @@ func configure() error {
 		return fmt.Errorf("BOT_TOKEN not found")
 	}
 
-	SCRIPT_PATH, ok = os.LookupEnv("MODEL_PATH")
+	MODEL_PATH, ok = os.LookupEnv("MODEL_PATH")
 
 	if !ok {
 		return fmt.Errorf("MODEL_PATH not found")
@@ -157,12 +157,14 @@ func processJobs(job job) jobResult {
 
 	outputFolder := fmt.Sprintf("%s/%s", OUTPUT_PATH, job.id)
 
-	args := []string{"-i", SCRIPT_PATH, job.prompt, outputFolder}
+	args := []string{"-i", "run_sd.sh", job.prompt, outputFolder}
 
 	cmd := exec.Command("zsh", args...)
 
 	var out bytes.Buffer
 	cmd.Stdout = &out
+
+	cmd.Env = append(os.Environ(), fmt.Sprintf("MODEL_PATH=%s", MODEL_PATH))
 
 	err := cmd.Run()
 
