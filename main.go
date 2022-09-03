@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -16,6 +17,7 @@ import (
 
 	"github.com/joho/godotenv"
 
+	"github.com/google/uuid"
 	"golang.org/x/exp/utf8string"
 )
 
@@ -24,6 +26,7 @@ const MAGIC_WORDS = "@BotatoideBot"
 var (
 	BOT_TOKEN   string
 	SCRIPT_PATH string
+	OUTPUT_PATH string
 )
 
 const MAX_JOBS = 10
@@ -33,6 +36,7 @@ type job struct {
 	prompt string
 	user   string
 	userId int
+	id     string
 }
 
 var jobQueue = make(chan job, MAX_JOBS)
@@ -63,6 +67,12 @@ func configure() error {
 
 	if !ok {
 		return fmt.Errorf("MODEL_PATH not found")
+	}
+
+	OUTPUT_PATH, ok = os.LookupEnv("OUTPUT_PATH")
+
+	if !ok {
+		return fmt.Errorf("OUTPUT_PATH not found")
 	}
 
 	return nil
@@ -145,7 +155,9 @@ func mention(name string, id int) string {
 
 func processJobs(job job) jobResult {
 
-	args := []string{"-i", SCRIPT_PATH, job.prompt}
+	outputFolder := fmt.Sprintf("%s/%s", OUTPUT_PATH, job.id)
+
+	args := []string{"-i", SCRIPT_PATH, job.prompt, outputFolder}
 
 	cmd := exec.Command("zsh", args...)
 
@@ -160,13 +172,17 @@ func processJobs(job job) jobResult {
 
 	}
 
-	folderName := strings.Replace(job.prompt, " ", "_", -1)
+	var outputPath string
 
-	if len(folderName) > 126 {
-		folderName = folderName[:126]
-	}
-
-	outputPath := strings.ReplaceAll(SCRIPT_PATH, "/run_sd.sh", "") + "/outputs/txt2img-samples/" + folderName + "/seed_27_00000.png"
+	filepath.Walk(outputFolder, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			outputPath = path
+		}
+		return nil
+	})
 
 	return jobResult{job: job, output: outputPath}
 }
@@ -215,6 +231,7 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 	message := update.Message.Text
 	user := update.Message.From.Username
 	userId := update.Message.From.ID
+	id := uuid.New()
 
 	if strings.HasPrefix(message, MAGIC_WORDS) {
 
@@ -253,7 +270,7 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 
 		log.Println("User", user, "request accepted")
 
-		jobQueue <- job{chatId: chatId, prompt: prompt, user: user, userId: userId}
+		jobQueue <- job{chatId: chatId, prompt: prompt, user: user, userId: userId, id: id.String()}
 
 		return
 	}

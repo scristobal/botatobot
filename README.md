@@ -4,7 +4,5 @@ Yet another Telegram bot
 
 ## TODOs
 
-- [ ] Send as Document instead of Photo to avoid compression
-- [ ] Generate random seeds
-- [ ] Call a python server, instead of using a script
-- [ ] Deploy bot to heroku and Python server locally
+- [ ] Use message ID to set output folder on Python script, then send all files inside that folder as MediaGroup.
+- [ ] Random seed, multiple images, etc.
