@@ -142,7 +142,7 @@ func validate(prompt string) bool {
 		return false
 	}
 
-	re := regexp.MustCompile(`^[\w\d\s]*$`)
+	re := regexp.MustCompile(`^[\w\d\s:]*$`)
 
 	return re.MatchString(prompt)
 }
@@ -163,8 +163,6 @@ func clean(msg string) string {
 	msg = strings.ReplaceAll(msg, "!", " ")
 
 	msg = strings.ReplaceAll(msg, "?", " ")
-
-	msg = strings.ReplaceAll(msg, ":", " ")
 
 	msg = strings.TrimSpace(msg)
 
