@@ -223,8 +223,10 @@ func resolveJob(ctx context.Context, b *bot.Bot, result jobResult) {
 	}
 
 	b.SendMediaGroup(ctx, &bot.SendMediaGroupParams{
-		ChatID: result.job.chatId,
-		Media:  media})
+		ChatID:              result.job.chatId,
+		Media:               media,
+		DisableNotification: true,
+	})
 
 	b.SendMessage(ctx, &bot.SendMessageParams{
 		ChatID:    result.job.chatId,
