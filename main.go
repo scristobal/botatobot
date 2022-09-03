@@ -22,34 +22,34 @@ import (
 
 const MAGIC_WORDS = "@BotatoideBot"
 
-type sd_path string
+var (
+	BOT_TOKEN   string
+	SCRIPT_PATH string
+)
 
-type config struct {
-	token string
-	path  string
-}
-
-func (c *config) load() {
+func configure() error {
 	err := godotenv.Load()
+	var ok bool
 
 	if err != nil {
-		fmt.Println("Error loading .env file, fallback on env vars")
+		fmt.Println("Failed to load .env file, fallback on env vars")
 	}
 
-	token, ok := os.LookupEnv("BOT_TOKEN")
+	BOT_TOKEN, ok = os.LookupEnv("BOT_TOKEN")
 
 	if !ok {
-		log.Fatal("BOT_TOKEN not found")
+		return fmt.Errorf("BOT_TOKEN not found")
+
 	}
 
-	path, ok := os.LookupEnv("SD_PATH")
+	SCRIPT_PATH, ok = os.LookupEnv("MODEL_PATH")
 
 	if !ok {
-		log.Fatal("SD_PATH not found")
+		return fmt.Errorf("MODEL_PATH not found")
 	}
 
-	c.token = token
-	c.path = path
+	return nil
+
 }
 
 type workLockerKey string
@@ -64,17 +64,17 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
-	c := config{}
+	err := configure()
 
-	c.load()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	opts := []bot.Option{
 		bot.WithDefaultHandler(handler),
 	}
 
-	b := bot.New(c.token, opts...)
-
-	ctx = context.WithValue(ctx, sd_path("sd_path"), c.path)
+	b := bot.New(BOT_TOKEN, opts...)
 
 	lock := &workLocker{working: false}
 
@@ -118,12 +118,6 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 			fmt.Println("Recovered in f", r)
 		}
 	}()
-
-	modelPath, ok := ctx.Value(sd_path("sd_path")).(string)
-
-	if !ok {
-		log.Fatal("SD_PATH not found")
-	}
 
 	lock, ok := ctx.Value(workLockerKey("workLocker")).(*workLocker)
 
@@ -171,7 +165,9 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 		lock.working = true
 		lock.mut.Unlock()
 
-		args := []string{"-i", "run_sd.sh", modelPath, prompt}
+		fmt.Println(SCRIPT_PATH)
+
+		args := []string{"-i", SCRIPT_PATH, prompt}
 
 		cmd := exec.Command("zsh", args...)
 
@@ -198,7 +194,7 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 			folderName = folderName[:126]
 		}
 
-		outputPath := modelPath + "/outputs/txt2img-samples/" + folderName + "/seed_27_00000.png"
+		outputPath := SCRIPT_PATH + "/outputs/txt2img-samples/" + folderName + "/seed_27_00000.png"
 
 		fmt.Println("Success. Sending file: ", outputPath)
 
