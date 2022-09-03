@@ -158,6 +158,14 @@ func clean(msg string) string {
 
 	msg = strings.ReplaceAll(msg, "/", " ")
 
+	msg = strings.ReplaceAll(msg, ".", " ")
+
+	msg = strings.ReplaceAll(msg, "!", " ")
+
+	msg = strings.ReplaceAll(msg, "?", " ")
+
+	msg = strings.ReplaceAll(msg, ":", " ")
+
 	msg = strings.TrimSpace(msg)
 
 	reg := regexp.MustCompile(`\s+`)
