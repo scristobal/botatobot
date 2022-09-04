@@ -267,19 +267,29 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 		}
 	}()
 
-	chatId := update.Message.Chat.ID
+	message := update.Message
 
-	message := update.Message.Text
+	if message == nil {
+		log.Printf("Got an update without a message. Skipping. \n")
+		return
+	}
+
+	messageText := update.Message.Text
 	messageId := update.Message.ID
+
+	chat := update.Message.Chat
+
+	chatId := chat.ID
+	chatType := chat.Type
 
 	user := update.Message.From.Username
 	userId := update.Message.From.ID
 
 	id := uuid.New()
 
-	if strings.HasPrefix(message, BOT_USERNAME) {
+	if strings.HasPrefix(messageText, BOT_USERNAME) || chatType == "private" {
 
-		prompt, err := getPrompt(message)
+		prompt, err := getPrompt(messageText)
 
 		if err != nil {
 			b.SendMessage(ctx, &bot.SendMessageParams{
@@ -320,7 +330,7 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 		return
 	}
 
-	if strings.HasPrefix(message, fmt.Sprintf("/start %s", BOT_USERNAME)) {
+	if strings.HasPrefix(messageText, fmt.Sprintf("/start %s", BOT_USERNAME)) {
 
 		b.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID: chatId,
@@ -328,7 +338,7 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 		})
 	}
 
-	if strings.HasPrefix(message, fmt.Sprintf("/queue %s", BOT_USERNAME)) {
+	if strings.HasPrefix(messageText, fmt.Sprintf("/queue %s", BOT_USERNAME)) {
 
 		b.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID: chatId,
