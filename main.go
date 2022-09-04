@@ -224,7 +224,7 @@ func processJobs(job job) jobResult {
 func resolveJob(ctx context.Context, b *bot.Bot, result jobResult) {
 
 	if result.err != nil {
-		log.Println("Failed to run the model")
+		log.Printf("Failed to run %s, error: %v\n", result.job.id, result.err)
 
 		b.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID:           result.job.chatId,
@@ -313,7 +313,7 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 				DisableNotification: true,
 			})
 
-		log.Println("User", user, "request accepted")
+		log.Printf("User %s request accepted, job id %s", user, id)
 
 		jobQueue <- job{chatId: chatId, prompt: prompt, user: user, userId: userId, msgId: messageId, id: id.String()}
 
