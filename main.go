@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
@@ -27,6 +28,28 @@ var (
 	MODEL_PATH   string
 	OUTPUT_PATH  string
 )
+
+type Command int8
+
+// commands
+const (
+	Help Command = iota
+	Generate
+	Status
+)
+
+func (c Command) String() string {
+	switch c {
+	case Help:
+		return "/help"
+	case Generate:
+		return "/generate"
+
+	case Status:
+		return "/status"
+	}
+	return "unknown"
+}
 
 const MAX_JOBS = 10
 
@@ -48,6 +71,11 @@ type jobResult struct {
 }
 
 var jobResults = make(chan jobResult, MAX_JOBS)
+
+var currentJob struct {
+	job *job
+	mut sync.RWMutex
+}
 
 func configure() error {
 	err := godotenv.Load()
@@ -104,6 +132,22 @@ func main() {
 
 	b := bot.New(BOT_TOKEN, opts...)
 
+	b.SetMyCommands(ctx, &bot.SetMyCommandsParams{
+		Commands: []models.BotCommand{
+			{
+				Command:     Generate.String(),
+				Description: "Generate a text from a prompt",
+			},
+			{
+				Command:     Status.String(),
+				Description: "Check the status of the current job, if any, and the queue length",
+			},
+			{
+				Command:     Help.String(),
+				Description: "Get help",
+			},
+		}})
+
 	log.Println("Initializing job queue...")
 
 	go func() {
@@ -144,11 +188,13 @@ func validate(prompt string) bool {
 
 	re := regexp.MustCompile(`^[\w\d\s:.]*$`)
 
-	return re.MatchString(prompt)
+	return re.MatchString(prompt) && len(prompt) > 0
 }
 
 func clean(msg string) string {
 	msg = strings.ReplaceAll(msg, BOT_USERNAME, "")
+
+	msg = strings.ReplaceAll(msg, Generate.String(), "")
 
 	msg = strings.ReplaceAll(msg, "\"", "")
 
@@ -162,6 +208,7 @@ func clean(msg string) string {
 
 	msg = strings.TrimSpace(msg)
 
+	// removes consecutive spaces
 	reg := regexp.MustCompile(`\s+`)
 	msg = reg.ReplaceAllString(msg, " ")
 
@@ -186,6 +233,10 @@ func Mention(name string, id int) string {
 }
 
 func processJobs(job job) jobResult {
+
+	currentJob.mut.Lock()
+	currentJob.job = &job
+	currentJob.mut.Unlock()
 
 	outputFolder := fmt.Sprintf("%s/%s", OUTPUT_PATH, job.id)
 
@@ -217,6 +268,10 @@ func processJobs(job job) jobResult {
 		}
 		return nil
 	})
+
+	currentJob.mut.Lock()
+	currentJob.job = nil
+	currentJob.mut.Unlock()
 
 	return jobResult{job: job, outputs: outputPath}
 }
@@ -280,14 +335,13 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 	chat := update.Message.Chat
 
 	chatId := chat.ID
-	chatType := chat.Type
 
 	user := update.Message.From.Username
 	userId := update.Message.From.ID
 
 	id := uuid.New()
 
-	if strings.HasPrefix(messageText, BOT_USERNAME) || chatType == "private" {
+	if strings.HasPrefix(messageText, Generate.String()) {
 
 		prompt, err := getPrompt(messageText)
 
@@ -315,13 +369,15 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 			return
 		}
 
-		b.SendMessage(ctx,
+		/*
+			b.SendMessage(ctx,
 			&bot.SendMessageParams{
 				ChatID:              chatId,
 				Text:                "Your request is being processed 🤖",
 				ReplyToMessageID:    messageId,
 				DisableNotification: true,
 			})
+		*/
 
 		log.Printf("User %s request accepted, job id %s", user, id)
 
@@ -330,20 +386,46 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 		return
 	}
 
-	if strings.HasPrefix(messageText, fmt.Sprintf("/start %s", BOT_USERNAME)) {
+	if strings.HasPrefix(messageText, Help.String()) {
 
 		b.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID: chatId,
-			Text:   "Hi! I'm a 🤖 that generates images from text. Just mention me follow by a prompt, like this: \n\n @BotatoideBot a cat in space \n\n and I'll generate an image for you!",
+			Text:   "Hi! I'm a 🤖 that generates images from text. Use the /generate command follow by a prompt, like this: \n\n   /generate a cat in space \n\nand I'll generate a few images for you!. It can take a while, you can check my status with /status",
 		})
 	}
 
-	if strings.HasPrefix(messageText, fmt.Sprintf("/queue %s", BOT_USERNAME)) {
+	if strings.HasPrefix(messageText, Status.String()) {
 
-		b.SendMessage(ctx, &bot.SendMessageParams{
-			ChatID: chatId,
-			Text:   fmt.Sprintf("The queue has %d jobs", len(jobQueue)),
-		})
+		currentJob.mut.RLock()
+		defer currentJob.mut.RUnlock()
+
+		numJobs := len(jobQueue)
+
+		if currentJob.job == nil && numJobs == 0 {
+			b.SendMessage(ctx, &bot.SendMessageParams{
+				ChatID: chatId,
+				Text:   "I am doing nothing and there are no jobs in the queue 🤖",
+			})
+			return
+		}
+
+		if currentJob.job != nil {
+			b.SendMessage(ctx, &bot.SendMessageParams{
+				ChatID:           chatId,
+				Text:             fmt.Sprintf("I am working on this message and the queue has %d more jobs", len(jobQueue)),
+				ReplyToMessageID: currentJob.job.msgId,
+			})
+			return
+		}
+
+		if numJobs > 0 {
+			b.SendMessage(ctx, &bot.SendMessageParams{
+				ChatID: chatId,
+				Text:   fmt.Sprintf("I am doing nothing and the queue has %d more jobs. That's weird!! ", len(jobQueue)),
+			})
+			return
+		}
+
 	}
 
 }
