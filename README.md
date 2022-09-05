@@ -4,7 +4,7 @@ Yet another Telegram bot, this one generates stable diffusion images on request.
 
 ## Setup
 
-Install this fork of stable diffusion <https://github.com/basujindal/stable-diffusion> and set the following env variables:
+Install this fork of stable diffusion <https://github.com/neonsecret/stable-diffusion> and set the following env variables:
 
 ```text
 BOT_TOKEN=123456789:ABCDEF1234567890ABCDEF1234567890ABC
