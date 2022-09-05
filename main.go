@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -54,20 +55,20 @@ func (c Command) String() string {
 const MAX_JOBS = 10
 
 type job struct {
-	chatId int
-	prompt string
-	user   string
-	userId int
-	msgId  int
-	id     string
+	ChatId int
+	Prompt string
+	User   string
+	UserId int
+	MsgId  int
+	Id     string
 }
 
 var jobQueue = make(chan job, MAX_JOBS)
 
 type jobResult struct {
-	job     job
-	err     error
-	outputs []string
+	Job     job
+	Err     error
+	Outputs []string
 }
 
 var jobResults = make(chan jobResult, MAX_JOBS)
@@ -238,9 +239,9 @@ func processJobs(job job) jobResult {
 	currentJob.job = &job
 	currentJob.mut.Unlock()
 
-	outputFolder := fmt.Sprintf("%s/%s", OUTPUT_PATH, job.id)
+	outputFolder := fmt.Sprintf("%s/%s", OUTPUT_PATH, job.Id)
 
-	args := []string{"-i", "run_sd.sh", job.prompt, outputFolder}
+	args := []string{"-i", "run_sd.sh", job.Prompt, outputFolder}
 
 	cmd := exec.Command("zsh", args...)
 
@@ -253,18 +254,18 @@ func processJobs(job job) jobResult {
 
 	if err != nil {
 		log.Printf("Error running script: %v", err)
-		return jobResult{job: job, err: err}
+		return jobResult{Job: job, Err: err}
 
 	}
 
-	var outputPath []string
+	var outputPaths []string
 
 	filepath.Walk(outputFolder, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 		if !info.IsDir() {
-			outputPath = append(outputPath, path)
+			outputPaths = append(outputPaths, path)
 		}
 		return nil
 	})
@@ -273,43 +274,57 @@ func processJobs(job job) jobResult {
 	currentJob.job = nil
 	currentJob.mut.Unlock()
 
-	return jobResult{job: job, outputs: outputPath}
+	return jobResult{Job: job, Outputs: outputPaths}
 }
 
 func resolveJob(ctx context.Context, b *bot.Bot, result jobResult) {
 
-	if result.err != nil {
-		log.Printf("Failed to run %s, error: %v\n", result.job.id, result.err)
+	content, err := json.Marshal(result)
+
+	if err != nil {
+		log.Printf("Error marshalling job result: %v", err)
+	}
+
+	outputFolder := fmt.Sprintf("%s/%s", OUTPUT_PATH, result.Job.Id)
+
+	err = os.WriteFile(fmt.Sprintf("%s/meta.json", outputFolder), content, 0644)
+
+	if err != nil {
+		log.Printf("Error writing meta.json of job %s: %v", result.Job.Id, err)
+	}
+
+	if result.Err != nil {
+		log.Printf("Failed to run %s, error: %v\n", result.Job.Id, result.Err)
 
 		b.SendMessage(ctx, &bot.SendMessageParams{
-			ChatID:           result.job.chatId,
+			ChatID:           result.Job.ChatId,
 			Text:             "Sorry, but something went wrong when running the model 😭",
-			ReplyToMessageID: result.job.msgId,
+			ReplyToMessageID: result.Job.MsgId,
 		})
 
 		return
 	}
 
-	log.Println("Success. Sending files from: ", result.job.id)
+	log.Println("Success. Sending files from: ", result.Job.Id)
 
 	var media []models.InputMedia
 
-	for _, output := range result.outputs {
+	for _, output := range result.Outputs {
 
 		fileContent, _ := os.ReadFile(output)
 
 		media = append(media, &models.InputMediaPhoto{
 			Media:           fmt.Sprintf("attach://%s", output),
 			MediaAttachment: bytes.NewReader(fileContent),
-			Caption:         result.job.prompt,
+			Caption:         result.Job.Prompt,
 		})
 	}
 
 	b.SendMediaGroup(ctx, &bot.SendMediaGroupParams{
-		ChatID:              result.job.chatId,
+		ChatID:              result.Job.ChatId,
 		Media:               media,
 		DisableNotification: true,
-		ReplyToMessageID:    result.job.msgId,
+		ReplyToMessageID:    result.Job.MsgId,
 	})
 
 }
@@ -381,7 +396,7 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 
 		log.Printf("User %s request accepted, job id %s", user, id)
 
-		jobQueue <- job{chatId: chatId, prompt: prompt, user: user, userId: userId, msgId: messageId, id: id.String()}
+		jobQueue <- job{ChatId: chatId, Prompt: prompt, User: user, UserId: userId, MsgId: messageId, Id: id.String()}
 
 		return
 	}
@@ -413,7 +428,7 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 			b.SendMessage(ctx, &bot.SendMessageParams{
 				ChatID:           chatId,
 				Text:             fmt.Sprintf("I am working on this message and the queue has %d more jobs", len(jobQueue)),
-				ReplyToMessageID: currentJob.job.msgId,
+				ReplyToMessageID: currentJob.job.MsgId,
 			})
 			return
 		}
