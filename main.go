@@ -3,9 +3,12 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -438,6 +441,151 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 				ChatID: chatId,
 				Text:   fmt.Sprintf("I am doing nothing and the queue has %d more jobs. That's weird!! ", len(jobQueue)),
 			})
+			return
+		}
+
+	}
+
+	if strings.HasPrefix(messageText, "/video-test") {
+
+		prompt := strings.ReplaceAll(messageText, "/video-test", "")
+
+		host := "http://127.0.0.1:5000/predictions"
+
+		res, err := http.Post(host, "application/json", strings.NewReader(fmt.Sprintf(
+			`{"input": {
+				"max_frames": 300,
+				"animation_prompts": "0: %s",
+				"angle": "0:(0)",
+				"zoom": "0: (1)",
+				"translation_x": "0: (5)",
+				"translation_y": "0: (0)",
+				"color_coherence": "Match Frame 0 LAB",
+				"sampler": "plms",
+				"fps": 15,
+				"seed": 142351
+			}}`,
+			prompt,
+		)))
+
+		if err != nil {
+			log.Println(err)
+			return
+		}
+
+		defer res.Body.Close()
+
+		body, err := io.ReadAll(res.Body)
+
+		if err != nil {
+			log.Println(err)
+			return
+		}
+
+		type modelResponse struct {
+			Status string `json:"status"`
+			Output string `json:"output"`
+		}
+
+		response := modelResponse{}
+
+		err = json.Unmarshal(body, &response)
+
+		if err != nil {
+			log.Println(err)
+			return
+		}
+
+		data := strings.SplitAfter(response.Output, ",")[1]
+
+		decoded, err := base64.StdEncoding.DecodeString(data)
+
+		if err != nil {
+			log.Println("Error decoding base64: ", err)
+
+			return
+		}
+
+		fileName := fmt.Sprintf("%s.mp4", strings.ReplaceAll(prompt, " ", "_"))
+
+		os.WriteFile(fileName, decoded, 0644)
+
+		msg, err := b.SendVideo(
+			ctx,
+			&bot.SendVideoParams{
+				ChatID:  chatId,
+				Caption: "Test video",
+				Video:   &models.InputFileUpload{Filename: "sample.mp4", Data: bytes.NewReader(decoded)},
+			})
+
+		if err != nil {
+			log.Println("Error sending video: ", err, msg)
+			return
+		}
+
+	}
+
+	if strings.HasPrefix(messageText, "/photo-test") {
+
+		prompt := strings.ReplaceAll(messageText, "/video-test", "")
+
+		host := "http://127.0.0.1:5001/predictions"
+
+		type modelResponse struct {
+			Status string   `json:"status"`
+			Output []string `json:"output"`
+		}
+
+		res, err := http.Post(host, "application/json", strings.NewReader(fmt.Sprintf(
+			`{"input": {
+				"prompt": "%s",
+			}}`,
+			prompt,
+		)))
+
+		if err != nil {
+			log.Println(err)
+			return
+		}
+
+		defer res.Body.Close()
+
+		body, err := io.ReadAll(res.Body)
+
+		if err != nil {
+			log.Println(err)
+			return
+		}
+
+		response := modelResponse{}
+
+		json.Unmarshal(body, &response)
+
+		// it returns a (base64) data URL
+		// get only first image
+		data := strings.SplitAfter(response.Output[0], ",")[1]
+
+		decoded, err := base64.StdEncoding.DecodeString(data)
+
+		if err != nil {
+			log.Println("Error decoding base64: ", err)
+			return
+		}
+
+		fileName := fmt.Sprintf("%s.mp4", strings.ReplaceAll(prompt, " ", "_"))
+
+		os.WriteFile(fileName, decoded, 0644)
+
+		msg, err := b.SendPhoto(
+			ctx,
+			&bot.SendPhotoParams{
+				ChatID:  chatId,
+				Caption: "Test photo",
+				Photo:   &models.InputFileUpload{Filename: "sample.png", Data: bytes.NewReader(decoded)},
+			})
+
+		if err != nil {
+			log.Println("Error sending photo: ", err, msg)
 			return
 		}
 
