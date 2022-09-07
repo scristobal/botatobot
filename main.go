@@ -42,6 +42,8 @@ const (
 	Status
 )
 
+var commands = []Command{Help, Generate, Status}
+
 func (c Command) String() string {
 	switch c {
 	case Help:
@@ -195,20 +197,30 @@ func validate(prompt string) bool {
 	return re.MatchString(prompt) && len(prompt) > 0
 }
 
+func removeSubstrings(s string, b []string) string {
+	for _, c := range b {
+		s = strings.ReplaceAll(s, c, "")
+	}
+	return s
+}
+
+func removeCommands(msg string) string {
+	for _, c := range commands {
+		msg = strings.ReplaceAll(msg, c.String(), "")
+	}
+	return msg
+}
+
+func removeBotName(msg string) string {
+	return strings.ReplaceAll(msg, BOT_USERNAME, "")
+}
+
 func clean(msg string) string {
-	msg = strings.ReplaceAll(msg, BOT_USERNAME, "")
+	msg = removeBotName(msg)
 
-	msg = strings.ReplaceAll(msg, Generate.String(), "")
+	msg = removeCommands(msg)
 
-	msg = strings.ReplaceAll(msg, "\"", "")
-
-	msg = strings.ReplaceAll(msg, ",", " ")
-
-	msg = strings.ReplaceAll(msg, "_", " ")
-
-	msg = strings.ReplaceAll(msg, "!", " ")
-
-	msg = strings.ReplaceAll(msg, "?", " ")
+	msg = removeSubstrings(msg, []string{"\n", "\r", "\t", "\"", "'", ",", ".", "!", "?", "_"})
 
 	msg = strings.TrimSpace(msg)
 
@@ -454,7 +466,7 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 
 		res, err := http.Post(host, "application/json", strings.NewReader(fmt.Sprintf(
 			`{"input": {
-				"max_frames": 300,
+				"max_frames": 900,
 				"animation_prompts": "0: %s",
 				"angle": "0:(0)",
 				"zoom": "0: (1)",
