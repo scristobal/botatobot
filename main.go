@@ -8,11 +8,10 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
-	"os/exec"
 	"os/signal"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -29,7 +28,7 @@ import (
 var (
 	BOT_TOKEN    string
 	BOT_USERNAME string
-	MODEL_PATH   string
+	MODEL_URL    string
 	OUTPUT_PATH  string
 )
 
@@ -103,10 +102,10 @@ func configure() error {
 		return fmt.Errorf("BOT_USERNAME not found")
 	}
 
-	MODEL_PATH, ok = os.LookupEnv("MODEL_PATH")
+	MODEL_URL, ok = os.LookupEnv("MODEL_URL")
 
 	if !ok {
-		return fmt.Errorf("MODEL_PATH not found")
+		return fmt.Errorf("MODEL_URL not found")
 	}
 
 	OUTPUT_PATH, ok = os.LookupEnv("OUTPUT_PATH")
@@ -254,36 +253,102 @@ func processJobs(job job) jobResult {
 	currentJob.job = &job
 	currentJob.mut.Unlock()
 
+	host := "http://127.0.0.1:5001/predictions"
+
+	type modelResponse struct {
+		Status string   `json:"status"`
+		Output []string `json:"output"` // (base64) data URLs
+	}
+
+	var outputs []string
+	var seeds []int
+
+	for i := 0; i < 5; i++ {
+
+		seed := rand.Intn(1000000)
+
+		res, err := http.Post(host, "application/json", strings.NewReader(fmt.Sprintf(`{"input": {"prompt": "%s","seed": %d}}`, job.Prompt, seed)))
+
+		if err != nil {
+			return jobResult{
+				Job: job,
+				Err: err,
+			}
+		}
+
+		defer res.Body.Close()
+
+		body, err := io.ReadAll(res.Body)
+
+		if err != nil {
+			return jobResult{
+				Job: job,
+				Err: err,
+			}
+		}
+
+		response := modelResponse{}
+
+		json.Unmarshal(body, &response)
+
+		outputs = append(outputs, response.Output[0])
+		seeds = append(seeds, seed)
+	}
+
 	outputFolder := fmt.Sprintf("%s/%s", OUTPUT_PATH, job.Id)
 
-	args := []string{"-i", "run_sd.sh", job.Prompt, outputFolder}
-
-	cmd := exec.Command("zsh", args...)
-
-	var out bytes.Buffer
-	cmd.Stdout = &out
-
-	cmd.Env = append(os.Environ(), fmt.Sprintf("MODEL_PATH=%s", MODEL_PATH))
-
-	err := cmd.Run()
+	err := os.MkdirAll(outputFolder, 0755)
 
 	if err != nil {
-		log.Printf("Error running script: %v", err)
-		return jobResult{Job: job, Err: err}
-
+		return jobResult{
+			Job: job,
+			Err: err,
+		}
 	}
 
 	var outputPaths []string
 
-	filepath.Walk(outputFolder, func(path string, info os.FileInfo, err error) error {
+	for i, output := range outputs {
+
+		// remove the data URL prefix
+		data := strings.SplitAfter(output, ",")[1]
+
+		decoded, err := base64.StdEncoding.DecodeString(data)
+
 		if err != nil {
-			return err
+			return jobResult{
+				Job: job,
+				Err: err,
+			}
 		}
-		if !info.IsDir() {
-			outputPaths = append(outputPaths, path)
+
+		fileName := fmt.Sprintf("seed_%d.png", seeds[i])
+
+		filePath := fmt.Sprintf("%s/%s", outputFolder, fileName)
+
+		err = os.WriteFile(filePath, decoded, 0644)
+
+		if err != nil {
+			return jobResult{
+				Job: job,
+				Err: err,
+			}
 		}
-		return nil
-	})
+
+		outputPaths = append(outputPaths, filePath)
+	}
+
+	content, err := json.Marshal(job)
+
+	if err != nil {
+		log.Printf("Error marshalling job %v", err)
+	}
+
+	err = os.WriteFile(fmt.Sprintf("%s/meta.json", outputFolder), content, 0644)
+
+	if err != nil {
+		log.Printf("Error writing meta.json of job %s: %v", job.Id, err)
+	}
 
 	currentJob.mut.Lock()
 	currentJob.job = nil
@@ -293,20 +358,6 @@ func processJobs(job job) jobResult {
 }
 
 func resolveJob(ctx context.Context, b *bot.Bot, result jobResult) {
-
-	content, err := json.Marshal(result)
-
-	if err != nil {
-		log.Printf("Error marshalling job result: %v", err)
-	}
-
-	outputFolder := fmt.Sprintf("%s/%s", OUTPUT_PATH, result.Job.Id)
-
-	err = os.WriteFile(fmt.Sprintf("%s/meta.json", outputFolder), content, 0644)
-
-	if err != nil {
-		log.Printf("Error writing meta.json of job %s: %v", result.Job.Id, err)
-	}
 
 	if result.Err != nil {
 		log.Printf("Failed to run %s, error: %v\n", result.Job.Id, result.Err)
@@ -532,72 +583,6 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 
 		if err != nil {
 			log.Println("Error sending video: ", err, msg)
-			return
-		}
-
-	}
-
-	if strings.HasPrefix(messageText, "/photo-test") {
-
-		prompt := strings.ReplaceAll(messageText, "/photo-test", "")
-
-		host := "http://127.0.0.1:5001/predictions"
-
-		type modelResponse struct {
-			Status string   `json:"status"`
-			Output []string `json:"output"`
-		}
-
-		res, err := http.Post(host, "application/json", strings.NewReader(fmt.Sprintf(
-			`{"input": {
-				"prompt": "%s"
-			}}`,
-			prompt,
-		)))
-
-		if err != nil {
-			log.Println(err)
-			return
-		}
-
-		defer res.Body.Close()
-
-		body, err := io.ReadAll(res.Body)
-
-		if err != nil {
-			log.Println(err)
-			return
-		}
-
-		response := modelResponse{}
-
-		json.Unmarshal(body, &response)
-
-		// it returns a (base64) data URL
-		// get only first image
-		data := strings.SplitAfter(response.Output[0], ",")[1]
-
-		decoded, err := base64.StdEncoding.DecodeString(data)
-
-		if err != nil {
-			log.Println("Error decoding base64: ", err)
-			return
-		}
-
-		fileName := fmt.Sprintf("%s.mp4", strings.ReplaceAll(prompt, " ", "_"))
-
-		os.WriteFile(fileName, decoded, 0644)
-
-		msg, err := b.SendPhoto(
-			ctx,
-			&bot.SendPhotoParams{
-				ChatID:  chatId,
-				Caption: "Test photo",
-				Photo:   &models.InputFileUpload{Filename: "sample.png", Data: bytes.NewReader(decoded)},
-			})
-
-		if err != nil {
-			log.Println("Error sending photo: ", err, msg)
 			return
 		}
 
