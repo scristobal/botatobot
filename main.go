@@ -206,7 +206,7 @@ func removeSubstrings(s string, b []string) string {
 
 func removeCommands(msg string) string {
 	for _, c := range commands {
-		msg = strings.ReplaceAll(msg, c.String(), "")
+		msg = strings.ReplaceAll(msg, fmt.Sprint(c), "")
 	}
 	return msg
 }
@@ -466,18 +466,18 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 
 		res, err := http.Post(host, "application/json", strings.NewReader(fmt.Sprintf(
 			`{"input": {
-				"max_frames": 900,
+				"max_frames": 300,
 				"animation_prompts": "0: %s",
 				"angle": "0:(0)",
 				"zoom": "0: (1)",
-				"translation_x": "0: (5)",
+				"translation_x": "0: (0)",
 				"translation_y": "0: (0)",
 				"color_coherence": "Match Frame 0 LAB",
 				"sampler": "plms",
-				"fps": 15,
-				"seed": 142351
+				"fps": 10,
+				"seed": 242351
 			}}`,
-			prompt,
+			prompt, // 142351
 		)))
 
 		if err != nil {
@@ -539,7 +539,7 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 
 	if strings.HasPrefix(messageText, "/photo-test") {
 
-		prompt := strings.ReplaceAll(messageText, "/video-test", "")
+		prompt := strings.ReplaceAll(messageText, "/photo-test", "")
 
 		host := "http://127.0.0.1:5001/predictions"
 
@@ -550,7 +550,7 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 
 		res, err := http.Post(host, "application/json", strings.NewReader(fmt.Sprintf(
 			`{"input": {
-				"prompt": "%s",
+				"prompt": "%s"
 			}}`,
 			prompt,
 		)))
