@@ -37,7 +37,7 @@ func main() {
 	log.Println("Loading configuration...")
 
 	opts := []bot.Option{
-		bot.WithDefaultHandler(handler),
+		bot.WithDefaultHandler(handleUpdate),
 	}
 
 	b := bot.New(cfg.BOT_TOKEN, opts...)
@@ -64,8 +64,13 @@ func main() {
 
 	go func() {
 		for {
-			job := worker.Pop()
-			sendResults(ctx, b, &job)
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				job := worker.Pop()
+				handleJob(ctx, b, &job)
+			}
 		}
 	}()
 
@@ -74,11 +79,7 @@ func main() {
 	b.Start(ctx)
 }
 
-func Mention(name string, id int) string {
-	return fmt.Sprintf("[%s](tg://user?id=%d)", name, id)
-}
-
-func sendResults(ctx context.Context, b *bot.Bot, job *worker.Job) {
+func handleJob(ctx context.Context, b *bot.Bot, job *worker.Job) {
 	outputFolder := fmt.Sprintf("%s/%s", cfg.OUTPUT_PATH, job.Id)
 
 	var outputFiles []string
@@ -131,7 +132,7 @@ func sendResults(ctx context.Context, b *bot.Bot, job *worker.Job) {
 	})
 }
 
-func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
+func handleUpdate(ctx context.Context, b *bot.Bot, update *models.Update) {
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -264,7 +265,7 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 				"fps": 10,
 				"seed": 242351
 			}}`,
-			prompt, // 142351
+			prompt,
 		)))
 
 		if err != nil {
