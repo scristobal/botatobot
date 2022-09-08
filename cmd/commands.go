@@ -1,12 +1,12 @@
 package cmd
 
-type Command int8
+type Command string
 
 // commands
 const (
-	Help Command = iota
-	Generate
-	Status
+	Help     Command = "/help"
+	Generate Command = "/generate"
+	Status   Command = "/status"
 )
 
 var commands = []Command{Help, Generate, Status}
@@ -14,12 +14,13 @@ var commands = []Command{Help, Generate, Status}
 func (c Command) String() string {
 	switch c {
 	case Help:
-		return "/help"
+		return "Get Help"
 	case Generate:
-		return "/generate"
+		return "Generate a text from a prompt"
 
 	case Status:
-		return "/status"
+		return "Generate a text from a prompt"
 	}
-	return "unknown"
+
+	return "Unknown command"
 }

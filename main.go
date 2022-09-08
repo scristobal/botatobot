@@ -70,16 +70,16 @@ func main() {
 	b.SetMyCommands(ctx, &bot.SetMyCommandsParams{
 		Commands: []models.BotCommand{
 			{
-				Command:     cmd.Generate.String(),
-				Description: "Generate a text from a prompt",
+				Command:     string(cmd.Generate),
+				Description: cmd.Generate.String(),
 			},
 			{
-				Command:     cmd.Status.String(),
-				Description: "Check the status of the current job, if any, and the queue length",
+				Command:     string(cmd.Status),
+				Description: cmd.Status.String(),
 			},
 			{
-				Command:     cmd.Help.String(),
-				Description: "Get help",
+				Command:     string(cmd.Help),
+				Description: cmd.Help.String(),
 			},
 		}})
 
