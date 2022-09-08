@@ -13,142 +13,72 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"regexp"
+	"scristobal/botatobot/cfg"
+	"scristobal/botatobot/cmd"
 	"strings"
 	"sync"
 
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 
-	"github.com/joho/godotenv"
-
 	"github.com/google/uuid"
-	"golang.org/x/exp/utf8string"
 )
-
-var (
-	BOT_TOKEN    string
-	BOT_USERNAME string
-	MODEL_URL    string
-	OUTPUT_PATH  string
-)
-
-type Command int8
-
-// commands
-const (
-	Help Command = iota
-	Generate
-	Status
-)
-
-var commands = []Command{Help, Generate, Status}
-
-func (c Command) String() string {
-	switch c {
-	case Help:
-		return "/help"
-	case Generate:
-		return "/generate"
-
-	case Status:
-		return "/status"
-	}
-	return "unknown"
-}
-
-const MAX_JOBS = 10
 
 type job struct {
+	Id     string
 	ChatId int
-	Prompt string
 	User   string
 	UserId int
 	MsgId  int
-	Id     string
+	Prompt string
+	Type   string
 }
 
-var jobQueue = make(chan job, MAX_JOBS)
+var jobQueue = make(chan job, cfg.MAX_JOBS)
 
 type jobResult struct {
 	Job job
 	Err error
 }
 
-var jobResults = make(chan jobResult, MAX_JOBS)
+var jobResults = make(chan jobResult, cfg.MAX_JOBS)
 
 var currentJob struct {
 	job *job
 	mut sync.RWMutex
 }
 
-func configure() error {
-	err := godotenv.Load()
-	var ok bool
+func main() {
+
+	err := cfg.FromEnv()
 
 	if err != nil {
-		log.Println("Failed to load .env file, fallback on env vars")
+		log.Fatalf("Error loading configuration: %v", err)
 	}
-
-	BOT_TOKEN, ok = os.LookupEnv("BOT_TOKEN")
-
-	if !ok {
-		return fmt.Errorf("BOT_TOKEN not found")
-	}
-
-	BOT_USERNAME, ok = os.LookupEnv("BOT_USERNAME")
-
-	if !ok {
-		return fmt.Errorf("BOT_USERNAME not found")
-	}
-
-	MODEL_URL, ok = os.LookupEnv("MODEL_URL")
-
-	if !ok {
-		return fmt.Errorf("MODEL_URL not found")
-	}
-
-	OUTPUT_PATH, ok = os.LookupEnv("OUTPUT_PATH")
-
-	if !ok {
-		return fmt.Errorf("OUTPUT_PATH not found")
-	}
-
-	return nil
-
-}
-
-func main() {
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
 	log.Println("Loading configuration...")
 
-	err := configure()
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	opts := []bot.Option{
 		bot.WithDefaultHandler(handler),
 	}
 
-	b := bot.New(BOT_TOKEN, opts...)
+	b := bot.New(cfg.BOT_TOKEN, opts...)
 
 	b.SetMyCommands(ctx, &bot.SetMyCommandsParams{
 		Commands: []models.BotCommand{
 			{
-				Command:     Generate.String(),
+				Command:     cmd.Generate.String(),
 				Description: "Generate a text from a prompt",
 			},
 			{
-				Command:     Status.String(),
+				Command:     cmd.Status.String(),
 				Description: "Check the status of the current job, if any, and the queue length",
 			},
 			{
-				Command:     Help.String(),
+				Command:     cmd.Help.String(),
 				Description: "Get help",
 			},
 		}})
@@ -182,67 +112,6 @@ func main() {
 	b.Start(ctx)
 
 }
-
-func validate(prompt string) bool {
-
-	ok := utf8string.NewString(prompt).IsASCII()
-
-	if !ok {
-		return false
-	}
-
-	re := regexp.MustCompile(`^[\w\d\s-:.]*$`)
-
-	return re.MatchString(prompt) && len(prompt) > 0
-}
-
-func removeSubstrings(s string, b []string) string {
-	for _, c := range b {
-		s = strings.ReplaceAll(s, c, "")
-	}
-	return s
-}
-
-func removeCommands(msg string) string {
-	for _, c := range commands {
-		msg = strings.ReplaceAll(msg, fmt.Sprint(c), "")
-	}
-	return msg
-}
-
-func removeBotName(msg string) string {
-	return strings.ReplaceAll(msg, BOT_USERNAME, "")
-}
-
-func clean(msg string) string {
-	msg = removeBotName(msg)
-
-	msg = removeCommands(msg)
-
-	msg = removeSubstrings(msg, []string{"\n", "\r", "\t", "\"", "'", ",", ".", "!", "?", "_"})
-
-	msg = strings.TrimSpace(msg)
-
-	// removes consecutive spaces
-	reg := regexp.MustCompile(`\s+`)
-	msg = reg.ReplaceAllString(msg, " ")
-
-	return msg
-}
-
-func getPrompt(msg string) (string, error) {
-
-	prompt := clean(msg)
-
-	ok := validate(prompt)
-
-	if !ok {
-		return "", fmt.Errorf("invalid characters in prompt")
-	}
-
-	return prompt, nil
-}
-
 func Mention(name string, id int) string {
 	return fmt.Sprintf("[%s](tg://user?id=%d)", name, id)
 }
@@ -258,7 +127,7 @@ func processJobs(job job) jobResult {
 		Output []string `json:"output"` // (base64) data URLs
 	}
 
-	outputFolder := fmt.Sprintf("%s/%s", OUTPUT_PATH, job.Id)
+	outputFolder := fmt.Sprintf("%s/%s", cfg.OUTPUT_PATH, job.Id)
 
 	err := os.MkdirAll(outputFolder, 0755)
 
@@ -281,7 +150,7 @@ func processJobs(job job) jobResult {
 
 			seed := rand.Intn(1000000)
 
-			res, err := http.Post(MODEL_URL, "application/json", strings.NewReader(fmt.Sprintf(`{"input": {"prompt": "%s","seed": %d}}`, job.Prompt, seed)))
+			res, err := http.Post(cfg.MODEL_URL, "application/json", strings.NewReader(fmt.Sprintf(`{"input": {"prompt": "%s","seed": %d}}`, job.Prompt, seed)))
 
 			if err != nil {
 				log.Printf("Error job %s while requesting model: %s\n", job.Id, err)
@@ -350,7 +219,7 @@ func resolveJob(ctx context.Context, b *bot.Bot, result jobResult) {
 		return
 	}
 
-	outputFolder := fmt.Sprintf("%s/%s", OUTPUT_PATH, result.Job.Id)
+	outputFolder := fmt.Sprintf("%s/%s", cfg.OUTPUT_PATH, result.Job.Id)
 
 	var outputFiles []string
 	var outputPaths []string
@@ -430,9 +299,9 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 
 	id := uuid.New()
 
-	if strings.HasPrefix(messageText, Generate.String()) {
+	if strings.HasPrefix(messageText, cmd.Generate.String()) {
 
-		prompt, err := getPrompt(messageText)
+		prompt, err := cmd.GetPrompt(messageText)
 
 		if err != nil {
 			b.SendMessage(ctx, &bot.SendMessageParams{
@@ -446,7 +315,7 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 
 		log.Printf("User %s requested %s \n", user, prompt)
 
-		if len(jobQueue) >= MAX_JOBS {
+		if len(jobQueue) >= cfg.MAX_JOBS {
 			b.SendMessage(ctx,
 				&bot.SendMessageParams{
 					ChatID:           chatId,
@@ -475,7 +344,7 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 		return
 	}
 
-	if strings.HasPrefix(messageText, Help.String()) {
+	if strings.HasPrefix(messageText, cmd.Help.String()) {
 
 		b.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID: chatId,
@@ -483,7 +352,7 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 		})
 	}
 
-	if strings.HasPrefix(messageText, Status.String()) {
+	if strings.HasPrefix(messageText, cmd.Status.String()) {
 
 		currentJob.mut.RLock()
 		defer currentJob.mut.RUnlock()
