@@ -269,62 +269,60 @@ func processJobs(job job) jobResult {
 		}
 	}
 
-	for i := 0; i < 10; i++ {
+	var wg sync.WaitGroup
 
-		seed := rand.Intn(1000000)
+	for i := 0; i < 5; i++ {
 
-		res, err := http.Post(MODEL_URL, "application/json", strings.NewReader(fmt.Sprintf(`{"input": {"prompt": "%s","seed": %d}}`, job.Prompt, seed)))
+		wg.Add(1)
 
-		if err != nil {
-			return jobResult{
-				Job: job,
-				Err: err,
+		go func() {
+
+			defer wg.Done()
+
+			seed := rand.Intn(1000000)
+
+			res, err := http.Post(MODEL_URL, "application/json", strings.NewReader(fmt.Sprintf(`{"input": {"prompt": "%s","seed": %d}}`, job.Prompt, seed)))
+
+			if err != nil {
+				log.Printf("Error job %s while requesting model: %s\n", job.Id, err)
 			}
-		}
 
-		defer res.Body.Close()
+			defer res.Body.Close()
 
-		body, err := io.ReadAll(res.Body)
+			body, err := io.ReadAll(res.Body)
 
-		if err != nil {
-			return jobResult{
-				Job: job,
-				Err: err,
+			if err != nil {
+				log.Printf("Error job %s while reading model response: %s\n", job.Id, err)
 			}
-		}
 
-		response := modelResponse{}
+			response := modelResponse{}
 
-		json.Unmarshal(body, &response)
+			json.Unmarshal(body, &response)
 
-		output := response.Output[0]
+			output := response.Output[0]
 
-		// remove the data URL prefix
-		data := strings.SplitAfter(output, ",")[1]
+			// remove the data URL prefix
+			data := strings.SplitAfter(output, ",")[1]
 
-		decoded, err := base64.StdEncoding.DecodeString(data)
+			decoded, err := base64.StdEncoding.DecodeString(data)
 
-		if err != nil {
-			return jobResult{
-				Job: job,
-				Err: err,
+			if err != nil {
+				log.Printf("Error job %s while decoding model response: %s\n", job.Id, err)
 			}
-		}
 
-		fileName := fmt.Sprintf("seed_%d.png", seed)
+			fileName := fmt.Sprintf("seed_%d.png", seed)
 
-		filePath := fmt.Sprintf("%s/%s", outputFolder, fileName)
+			filePath := fmt.Sprintf("%s/%s", outputFolder, fileName)
 
-		err = os.WriteFile(filePath, decoded, 0644)
+			err = os.WriteFile(filePath, decoded, 0644)
 
-		if err != nil {
-			return jobResult{
-				Job: job,
-				Err: err,
+			if err != nil {
+				log.Printf("Error job %s while writing image: %s\n", job.Id, err)
 			}
-		}
-
+		}()
 	}
+
+	wg.Wait()
 
 	content, err := json.Marshal(job)
 
@@ -348,7 +346,28 @@ func processJobs(job job) jobResult {
 func resolveJob(ctx context.Context, b *bot.Bot, result jobResult) {
 
 	if result.Err != nil {
-		log.Printf("Failed to run %s, error: %v\n", result.Job.Id, result.Err)
+		log.Printf("Error job %s: %s\n", result.Job.Id, result.Err)
+		return
+	}
+
+	outputFolder := fmt.Sprintf("%s/%s", OUTPUT_PATH, result.Job.Id)
+
+	var outputFiles []string
+	var outputPaths []string
+
+	filepath.Walk(outputFolder, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() && strings.HasSuffix(info.Name(), ".png") {
+			outputPaths = append(outputPaths, path)
+			outputFiles = append(outputFiles, info.Name())
+		}
+		return nil
+	})
+
+	if len(outputFiles) == 0 {
+		log.Printf("Error job %s no file found\n", result.Job.Id)
 
 		b.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID:           result.Job.ChatId,
@@ -361,25 +380,19 @@ func resolveJob(ctx context.Context, b *bot.Bot, result jobResult) {
 
 	log.Println("Success. Sending files from: ", result.Job.Id)
 
-	outputFolder := fmt.Sprintf("%s/%s", OUTPUT_PATH, result.Job.Id)
-
 	var media []models.InputMedia
 
-	filepath.Walk(outputFolder, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if !info.IsDir() && strings.HasSuffix(info.Name(), ".png") {
-			fileContent, _ := os.ReadFile(path)
+	for i, path := range outputPaths {
 
-			media = append(media, &models.InputMediaPhoto{
-				Media:           fmt.Sprintf("attach://%s", info.Name()),
-				MediaAttachment: bytes.NewReader(fileContent),
-				Caption:         result.Job.Prompt,
-			})
-		}
-		return nil
-	})
+		fileContent, _ := os.ReadFile(path)
+
+		media = append(media, &models.InputMediaPhoto{
+			Media:           fmt.Sprintf("attach://%s", outputFiles[i]),
+			MediaAttachment: bytes.NewReader(fileContent),
+			Caption:         result.Job.Prompt,
+		})
+
+	}
 
 	b.SendMediaGroup(ctx, &bot.SendMediaGroupParams{
 		ChatID:              result.Job.ChatId,
