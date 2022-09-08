@@ -31,7 +31,7 @@ func removeSubstrings(s string, b []string) string {
 
 func removeCommands(msg string) string {
 	for _, c := range commands {
-		msg = strings.ReplaceAll(msg, fmt.Sprint(c), "")
+		msg = strings.ReplaceAll(msg, string(c), "")
 	}
 	return msg
 }
