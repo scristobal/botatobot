@@ -13,18 +13,22 @@ import (
 	"scristobal/botatobot/cfg"
 	"strings"
 	"sync"
+	"time"
 )
 
-var pending = make(chan Job, cfg.MAX_JOBS)
+var (
+	pending chan Job
+	done    chan Job
+	current currentJob
+)
 
-var done = make(chan Job, cfg.MAX_JOBS)
+func Init(ctx context.Context) {
 
-var current struct {
-	job *Job
-	mut sync.RWMutex
-}
+	pending = make(chan Job, cfg.MAX_JOBS)
 
-func Init(ctx context.Context, resolver func(*Job)) {
+	done = make(chan Job, cfg.MAX_JOBS)
+
+	rand.Seed(time.Now().UnixNano())
 
 	go func() {
 		for {
@@ -36,17 +40,6 @@ func Init(ctx context.Context, resolver func(*Job)) {
 					job.process(ctx)
 					done <- job
 				}
-			}
-		}
-	}()
-
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case job := <-done:
-				resolver(&job)
 			}
 		}
 	}()
@@ -145,8 +138,12 @@ func (job Job) process(ctx context.Context) {
 
 }
 
-func Queue(job Job) {
+func Push(job Job) {
 	pending <- job
+}
+
+func Pop() Job {
+	return <-done
 }
 
 func Len() int {

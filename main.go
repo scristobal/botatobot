@@ -60,71 +60,75 @@ func main() {
 
 	log.Println("Initializing job queue...")
 
-	worker.Init(ctx, makeResolver(ctx, b))
+	worker.Init(ctx)
+
+	go func() {
+		for {
+			job := worker.Pop()
+			sendResults(ctx, b, &job)
+		}
+	}()
 
 	log.Println("Starting bot...")
 
 	b.Start(ctx)
-
 }
 
 func Mention(name string, id int) string {
 	return fmt.Sprintf("[%s](tg://user?id=%d)", name, id)
 }
 
-func makeResolver(ctx context.Context, b *bot.Bot) func(*worker.Job) {
-	return func(job *worker.Job) {
-		outputFolder := fmt.Sprintf("%s/%s", cfg.OUTPUT_PATH, job.Id)
+func sendResults(ctx context.Context, b *bot.Bot, job *worker.Job) {
+	outputFolder := fmt.Sprintf("%s/%s", cfg.OUTPUT_PATH, job.Id)
 
-		var outputFiles []string
-		var outputPaths []string
+	var outputFiles []string
+	var outputPaths []string
 
-		filepath.Walk(outputFolder, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return err
-			}
-			if !info.IsDir() && strings.HasSuffix(info.Name(), ".png") {
-				outputPaths = append(outputPaths, path)
-				outputFiles = append(outputFiles, info.Name())
-			}
-			return nil
+	filepath.Walk(outputFolder, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() && strings.HasSuffix(info.Name(), ".png") {
+			outputPaths = append(outputPaths, path)
+			outputFiles = append(outputFiles, info.Name())
+		}
+		return nil
+	})
+
+	if len(outputFiles) == 0 {
+		log.Printf("Error job %s no file found\n", job.Id)
+
+		b.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID:           job.ChatId,
+			Text:             "Sorry, but something went wrong when running the model 😭",
+			ReplyToMessageID: job.MsgId,
 		})
 
-		if len(outputFiles) == 0 {
-			log.Printf("Error job %s no file found\n", job.Id)
-
-			b.SendMessage(ctx, &bot.SendMessageParams{
-				ChatID:           job.ChatId,
-				Text:             "Sorry, but something went wrong when running the model 😭",
-				ReplyToMessageID: job.MsgId,
-			})
-
-			return
-		}
-
-		log.Println("Success. Sending files from: ", job.Id)
-
-		var media []models.InputMedia
-
-		for i, path := range outputPaths {
-
-			fileContent, _ := os.ReadFile(path)
-
-			media = append(media, &models.InputMediaPhoto{
-				Media:           fmt.Sprintf("attach://%s", outputFiles[i]),
-				MediaAttachment: bytes.NewReader(fileContent),
-				Caption:         job.Prompt,
-			})
-
-		}
-
-		b.SendMediaGroup(ctx, &bot.SendMediaGroupParams{
-			ChatID:              job.ChatId,
-			Media:               media,
-			DisableNotification: true,
-			ReplyToMessageID:    job.MsgId,
-		})
+		return
 	}
+
+	log.Println("Success. Sending files from: ", job.Id)
+
+	var media []models.InputMedia
+
+	for i, path := range outputPaths {
+
+		fileContent, _ := os.ReadFile(path)
+
+		media = append(media, &models.InputMediaPhoto{
+			Media:           fmt.Sprintf("attach://%s", outputFiles[i]),
+			MediaAttachment: bytes.NewReader(fileContent),
+			Caption:         job.Prompt,
+		})
+
+	}
+
+	b.SendMediaGroup(ctx, &bot.SendMediaGroupParams{
+		ChatID:              job.ChatId,
+		Media:               media,
+		DisableNotification: true,
+		ReplyToMessageID:    job.MsgId,
+	})
 }
 
 func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
@@ -196,7 +200,7 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 		log.Printf("User %s request accepted, job id %s", user, id)
 
 		// replace by queue.AddJob(ctx, job)
-		worker.Queue(worker.Job{ChatId: chatId, Prompt: prompt, User: user, UserId: userId, MsgId: messageId, Id: id.String()})
+		worker.Push(worker.Job{ChatId: chatId, Prompt: prompt, User: user, UserId: userId, MsgId: messageId, Id: id.String()})
 
 		return
 	}
