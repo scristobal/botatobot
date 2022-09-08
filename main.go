@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -70,9 +71,8 @@ type job struct {
 var jobQueue = make(chan job, MAX_JOBS)
 
 type jobResult struct {
-	Job     job
-	Err     error
-	Outputs []string
+	Job job
+	Err error
 }
 
 var jobResults = make(chan jobResult, MAX_JOBS)
@@ -253,21 +253,27 @@ func processJobs(job job) jobResult {
 	currentJob.job = &job
 	currentJob.mut.Unlock()
 
-	host := "http://127.0.0.1:5001/predictions"
-
 	type modelResponse struct {
 		Status string   `json:"status"`
 		Output []string `json:"output"` // (base64) data URLs
 	}
 
-	var outputs []string
-	var seeds []int
+	outputFolder := fmt.Sprintf("%s/%s", OUTPUT_PATH, job.Id)
 
-	for i := 0; i < 5; i++ {
+	err := os.MkdirAll(outputFolder, 0755)
+
+	if err != nil {
+		return jobResult{
+			Job: job,
+			Err: err,
+		}
+	}
+
+	for i := 0; i < 10; i++ {
 
 		seed := rand.Intn(1000000)
 
-		res, err := http.Post(host, "application/json", strings.NewReader(fmt.Sprintf(`{"input": {"prompt": "%s","seed": %d}}`, job.Prompt, seed)))
+		res, err := http.Post(MODEL_URL, "application/json", strings.NewReader(fmt.Sprintf(`{"input": {"prompt": "%s","seed": %d}}`, job.Prompt, seed)))
 
 		if err != nil {
 			return jobResult{
@@ -291,24 +297,7 @@ func processJobs(job job) jobResult {
 
 		json.Unmarshal(body, &response)
 
-		outputs = append(outputs, response.Output[0])
-		seeds = append(seeds, seed)
-	}
-
-	outputFolder := fmt.Sprintf("%s/%s", OUTPUT_PATH, job.Id)
-
-	err := os.MkdirAll(outputFolder, 0755)
-
-	if err != nil {
-		return jobResult{
-			Job: job,
-			Err: err,
-		}
-	}
-
-	var outputPaths []string
-
-	for i, output := range outputs {
+		output := response.Output[0]
 
 		// remove the data URL prefix
 		data := strings.SplitAfter(output, ",")[1]
@@ -322,7 +311,7 @@ func processJobs(job job) jobResult {
 			}
 		}
 
-		fileName := fmt.Sprintf("seed_%d.png", seeds[i])
+		fileName := fmt.Sprintf("seed_%d.png", seed)
 
 		filePath := fmt.Sprintf("%s/%s", outputFolder, fileName)
 
@@ -335,7 +324,6 @@ func processJobs(job job) jobResult {
 			}
 		}
 
-		outputPaths = append(outputPaths, filePath)
 	}
 
 	content, err := json.Marshal(job)
@@ -354,7 +342,7 @@ func processJobs(job job) jobResult {
 	currentJob.job = nil
 	currentJob.mut.Unlock()
 
-	return jobResult{Job: job, Outputs: outputPaths}
+	return jobResult{Job: job}
 }
 
 func resolveJob(ctx context.Context, b *bot.Bot, result jobResult) {
@@ -373,18 +361,25 @@ func resolveJob(ctx context.Context, b *bot.Bot, result jobResult) {
 
 	log.Println("Success. Sending files from: ", result.Job.Id)
 
+	outputFolder := fmt.Sprintf("%s/%s", OUTPUT_PATH, result.Job.Id)
+
 	var media []models.InputMedia
 
-	for _, output := range result.Outputs {
+	filepath.Walk(outputFolder, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() && strings.HasSuffix(info.Name(), ".png") {
+			fileContent, _ := os.ReadFile(path)
 
-		fileContent, _ := os.ReadFile(output)
-
-		media = append(media, &models.InputMediaPhoto{
-			Media:           fmt.Sprintf("attach://%s", output),
-			MediaAttachment: bytes.NewReader(fileContent),
-			Caption:         result.Job.Prompt,
-		})
-	}
+			media = append(media, &models.InputMediaPhoto{
+				Media:           fmt.Sprintf("attach://%s", info.Name()),
+				MediaAttachment: bytes.NewReader(fileContent),
+				Caption:         result.Job.Prompt,
+			})
+		}
+		return nil
+	})
 
 	b.SendMediaGroup(ctx, &bot.SendMediaGroupParams{
 		ChatID:              result.Job.ChatId,
