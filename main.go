@@ -34,16 +34,11 @@ type job struct {
 	Type   string
 }
 
-var jobQueue = make(chan job, cfg.MAX_JOBS)
+var pending = make(chan job, cfg.MAX_JOBS)
 
-type jobResult struct {
-	Job job
-	Err error
-}
+var done = make(chan job, cfg.MAX_JOBS)
 
-var jobResults = make(chan jobResult, cfg.MAX_JOBS)
-
-var currentJob struct {
+var current struct {
 	job *job
 	mut sync.RWMutex
 }
@@ -90,8 +85,8 @@ func main() {
 			select {
 			case <-ctx.Done():
 				return
-			case job := <-jobQueue:
-				jobResults <- processJobs(job)
+			case job := <-pending:
+				done <- processJobs(job)
 			}
 		}
 	}()
@@ -101,7 +96,7 @@ func main() {
 			select {
 			case <-ctx.Done():
 				return
-			case result := <-jobResults:
+			case result := <-pending:
 				resolveJob(ctx, b, result)
 			}
 		}
@@ -116,11 +111,11 @@ func Mention(name string, id int) string {
 	return fmt.Sprintf("[%s](tg://user?id=%d)", name, id)
 }
 
-func processJobs(job job) jobResult {
+func processJobs(job job) job {
 
-	currentJob.mut.Lock()
-	currentJob.job = &job
-	currentJob.mut.Unlock()
+	current.mut.Lock()
+	current.job = &job
+	current.mut.Unlock()
 
 	type modelResponse struct {
 		Status string   `json:"status"`
@@ -132,10 +127,7 @@ func processJobs(job job) jobResult {
 	err := os.MkdirAll(outputFolder, 0755)
 
 	if err != nil {
-		return jobResult{
-			Job: job,
-			Err: err,
-		}
+		return job
 	}
 
 	var wg sync.WaitGroup
@@ -205,21 +197,16 @@ func processJobs(job job) jobResult {
 		log.Printf("Error writing meta.json of job %s: %v", job.Id, err)
 	}
 
-	currentJob.mut.Lock()
-	currentJob.job = nil
-	currentJob.mut.Unlock()
+	current.mut.Lock()
+	current.job = nil
+	current.mut.Unlock()
 
-	return jobResult{Job: job}
+	return job
 }
 
-func resolveJob(ctx context.Context, b *bot.Bot, result jobResult) {
+func resolveJob(ctx context.Context, b *bot.Bot, job job) {
 
-	if result.Err != nil {
-		log.Printf("Error job %s: %s\n", result.Job.Id, result.Err)
-		return
-	}
-
-	outputFolder := fmt.Sprintf("%s/%s", cfg.OUTPUT_PATH, result.Job.Id)
+	outputFolder := fmt.Sprintf("%s/%s", cfg.OUTPUT_PATH, job.Id)
 
 	var outputFiles []string
 	var outputPaths []string
@@ -236,18 +223,18 @@ func resolveJob(ctx context.Context, b *bot.Bot, result jobResult) {
 	})
 
 	if len(outputFiles) == 0 {
-		log.Printf("Error job %s no file found\n", result.Job.Id)
+		log.Printf("Error job %s no file found\n", job.Id)
 
 		b.SendMessage(ctx, &bot.SendMessageParams{
-			ChatID:           result.Job.ChatId,
+			ChatID:           job.ChatId,
 			Text:             "Sorry, but something went wrong when running the model 😭",
-			ReplyToMessageID: result.Job.MsgId,
+			ReplyToMessageID: job.MsgId,
 		})
 
 		return
 	}
 
-	log.Println("Success. Sending files from: ", result.Job.Id)
+	log.Println("Success. Sending files from: ", job.Id)
 
 	var media []models.InputMedia
 
@@ -258,16 +245,16 @@ func resolveJob(ctx context.Context, b *bot.Bot, result jobResult) {
 		media = append(media, &models.InputMediaPhoto{
 			Media:           fmt.Sprintf("attach://%s", outputFiles[i]),
 			MediaAttachment: bytes.NewReader(fileContent),
-			Caption:         result.Job.Prompt,
+			Caption:         job.Prompt,
 		})
 
 	}
 
 	b.SendMediaGroup(ctx, &bot.SendMediaGroupParams{
-		ChatID:              result.Job.ChatId,
+		ChatID:              job.ChatId,
 		Media:               media,
 		DisableNotification: true,
-		ReplyToMessageID:    result.Job.MsgId,
+		ReplyToMessageID:    job.MsgId,
 	})
 
 }
@@ -315,7 +302,7 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 
 		log.Printf("User %s requested %s \n", user, prompt)
 
-		if len(jobQueue) >= cfg.MAX_JOBS {
+		if len(pending) >= cfg.MAX_JOBS {
 			b.SendMessage(ctx,
 				&bot.SendMessageParams{
 					ChatID:           chatId,
@@ -339,7 +326,7 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 
 		log.Printf("User %s request accepted, job id %s", user, id)
 
-		jobQueue <- job{ChatId: chatId, Prompt: prompt, User: user, UserId: userId, MsgId: messageId, Id: id.String()}
+		pending <- job{ChatId: chatId, Prompt: prompt, User: user, UserId: userId, MsgId: messageId, Id: id.String()}
 
 		return
 	}
@@ -354,12 +341,12 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 
 	if strings.HasPrefix(messageText, cmd.Status.String()) {
 
-		currentJob.mut.RLock()
-		defer currentJob.mut.RUnlock()
+		current.mut.RLock()
+		defer current.mut.RUnlock()
 
-		numJobs := len(jobQueue)
+		numJobs := len(pending)
 
-		if currentJob.job == nil && numJobs == 0 {
+		if current.job == nil && numJobs == 0 {
 			b.SendMessage(ctx, &bot.SendMessageParams{
 				ChatID: chatId,
 				Text:   "I am doing nothing and there are no jobs in the queue 🤖",
@@ -367,11 +354,11 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 			return
 		}
 
-		if currentJob.job != nil {
+		if current.job != nil {
 			b.SendMessage(ctx, &bot.SendMessageParams{
 				ChatID:           chatId,
-				Text:             fmt.Sprintf("I am working on this message and the queue has %d more jobs", len(jobQueue)),
-				ReplyToMessageID: currentJob.job.MsgId,
+				Text:             fmt.Sprintf("I am working on this message and the queue has %d more jobs", len(pending)),
+				ReplyToMessageID: current.job.MsgId,
 			})
 			return
 		}
@@ -379,7 +366,7 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 		if numJobs > 0 {
 			b.SendMessage(ctx, &bot.SendMessageParams{
 				ChatID: chatId,
-				Text:   fmt.Sprintf("I am doing nothing and the queue has %d more jobs. That's weird!! ", len(jobQueue)),
+				Text:   fmt.Sprintf("I am doing nothing and the queue has %d more jobs. That's weird!! ", len(pending)),
 			})
 			return
 		}
