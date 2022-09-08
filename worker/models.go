@@ -1,5 +1,7 @@
 package worker
 
+import "sync"
+
 type Job struct {
 	Id     string
 	ChatId int
@@ -8,4 +10,9 @@ type Job struct {
 	MsgId  int
 	Prompt string
 	Type   string
+}
+
+type currentJob struct {
+	job *Job
+	mut sync.RWMutex
 }
