@@ -10,16 +10,33 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"path/filepath"
 	"scristobal/botatobot/cfg"
+	"scristobal/botatobot/cmd"
 	"strings"
 	"sync"
 	"time"
 )
 
+type Job struct {
+	Id     string
+	ChatId int
+	User   string
+	UserId int
+	MsgId  int
+	Params cmd.Params
+	Type   string
+}
+
+type CurrentJob struct {
+	job *Job
+	mut sync.RWMutex
+}
+
 var (
 	pending chan Job
 	done    chan Job
-	current currentJob
+	current CurrentJob
 )
 
 func Init(ctx context.Context) {
@@ -57,68 +74,42 @@ func (job Job) process(ctx context.Context) {
 		Output []string `json:"output"` // (base64) data URLs
 	}
 
-	outputFolder := fmt.Sprintf("%s/%s", cfg.OUTPUT_PATH, job.Id)
-
-	err := os.MkdirAll(outputFolder, 0755)
+	res, err := http.Post(cfg.MODEL_URL, "application/json", strings.NewReader(fmt.Sprintf(`{"input": {"prompt": "%s","seed": %d}}`, job.Params.Prompt, *job.Params.Seed)))
 
 	if err != nil {
-		return
+		log.Printf("Error job %s while requesting model: %s\n", job.Id, err)
 	}
 
-	var wg sync.WaitGroup
+	defer res.Body.Close()
 
-	for i := 0; i < 5; i++ {
+	body, err := io.ReadAll(res.Body)
 
-		wg.Add(1)
-
-		go func() {
-
-			defer wg.Done()
-
-			seed := rand.Intn(1000000)
-
-			res, err := http.Post(cfg.MODEL_URL, "application/json", strings.NewReader(fmt.Sprintf(`{"input": {"prompt": "%s","seed": %d}}`, job.Prompt, seed)))
-
-			if err != nil {
-				log.Printf("Error job %s while requesting model: %s\n", job.Id, err)
-			}
-
-			defer res.Body.Close()
-
-			body, err := io.ReadAll(res.Body)
-
-			if err != nil {
-				log.Printf("Error job %s while reading model response: %s\n", job.Id, err)
-			}
-
-			response := modelResponse{}
-
-			json.Unmarshal(body, &response)
-
-			output := response.Output[0]
-
-			// remove the data URL prefix
-			data := strings.SplitAfter(output, ",")[1]
-
-			decoded, err := base64.StdEncoding.DecodeString(data)
-
-			if err != nil {
-				log.Printf("Error job %s while decoding model response: %s\n", job.Id, err)
-			}
-
-			fileName := fmt.Sprintf("seed_%d.png", seed)
-
-			filePath := fmt.Sprintf("%s/%s", outputFolder, fileName)
-
-			err = os.WriteFile(filePath, decoded, 0644)
-
-			if err != nil {
-				log.Printf("Error job %s while writing image: %s\n", job.Id, err)
-			}
-		}()
+	if err != nil {
+		log.Printf("Error job %s while reading model response: %s\n", job.Id, err)
 	}
 
-	wg.Wait()
+	response := modelResponse{}
+
+	json.Unmarshal(body, &response)
+
+	output := response.Output[0]
+
+	// remove the data URL prefix
+	data := strings.SplitAfter(output, ",")[1]
+
+	decoded, err := base64.StdEncoding.DecodeString(data)
+
+	if err != nil {
+		log.Printf("Error job %s while decoding model response: %s\n", job.Id, err)
+	}
+
+	imgFilePath := filepath.Join(cfg.OUTPUT_PATH, fmt.Sprintf("%s.png", job.Id))
+
+	err = os.WriteFile(imgFilePath, decoded, 0644)
+
+	if err != nil {
+		log.Printf("Error job %s while writing image: %s\n", job.Id, err)
+	}
 
 	content, err := json.Marshal(job)
 
@@ -126,7 +117,9 @@ func (job Job) process(ctx context.Context) {
 		log.Printf("Error marshalling job %v", err)
 	}
 
-	err = os.WriteFile(fmt.Sprintf("%s/meta.json", outputFolder), content, 0644)
+	jsonFilePath := filepath.Join(cfg.OUTPUT_PATH, fmt.Sprintf("%s.json", job.Id))
+
+	err = os.WriteFile(jsonFilePath, content, 0644)
 
 	if err != nil {
 		log.Printf("Error writing meta.json of job %s: %v", job.Id, err)

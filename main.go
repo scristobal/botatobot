@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"os/signal"
@@ -42,21 +43,7 @@ func main() {
 
 	b := bot.New(cfg.BOT_TOKEN, opts...)
 
-	b.SetMyCommands(ctx, &bot.SetMyCommandsParams{
-		Commands: []models.BotCommand{
-			{
-				Command:     string(cmd.Generate),
-				Description: cmd.Generate.String(),
-			},
-			{
-				Command:     string(cmd.Status),
-				Description: cmd.Status.String(),
-			},
-			{
-				Command:     string(cmd.Help),
-				Description: cmd.Help.String(),
-			},
-		}})
+	b.SetMyCommands(ctx, &bot.SetMyCommandsParams{Commands: []models.BotCommand{}})
 
 	log.Println("Initializing job queue...")
 
@@ -80,23 +67,11 @@ func main() {
 }
 
 func handleJob(ctx context.Context, b *bot.Bot, job *worker.Job) {
-	outputFolder := fmt.Sprintf("%s/%s", cfg.OUTPUT_PATH, job.Id)
 
-	var outputFiles []string
-	var outputPaths []string
+	imgPath := filepath.Join(cfg.OUTPUT_PATH, job.Id+".png")
+	imgContent, err := os.ReadFile(imgPath)
 
-	filepath.Walk(outputFolder, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if !info.IsDir() && strings.HasSuffix(info.Name(), ".png") {
-			outputPaths = append(outputPaths, path)
-			outputFiles = append(outputFiles, info.Name())
-		}
-		return nil
-	})
-
-	if len(outputFiles) == 0 {
+	if err != nil {
 		log.Printf("Error job %s no file found\n", job.Id)
 
 		b.SendMessage(ctx, &bot.SendMessageParams{
@@ -108,28 +83,18 @@ func handleJob(ctx context.Context, b *bot.Bot, job *worker.Job) {
 		return
 	}
 
-	log.Println("Success. Sending files from: ", job.Id)
+	log.Println("Success. Sending file from: ", job.Id)
 
-	var media []models.InputMedia
-
-	for i, path := range outputPaths {
-
-		fileContent, _ := os.ReadFile(path)
-
-		media = append(media, &models.InputMediaPhoto{
-			Media:           fmt.Sprintf("attach://%s", outputFiles[i]),
-			MediaAttachment: bytes.NewReader(fileContent),
-			Caption:         job.Prompt,
-		})
-
-	}
-
-	b.SendMediaGroup(ctx, &bot.SendMediaGroupParams{
-		ChatID:              job.ChatId,
-		Media:               media,
+	b.SendPhoto(ctx, &bot.SendPhotoParams{
+		ChatID:  job.ChatId,
+		Caption: fmt.Sprint(job.Params),
+		Photo: &models.InputFileUpload{
+			Data:     bytes.NewReader(imgContent),
+			Filename: filepath.Base(imgPath),
+		},
 		DisableNotification: true,
-		ReplyToMessageID:    job.MsgId,
 	})
+
 }
 
 func handleUpdate(ctx context.Context, b *bot.Bot, update *models.Update) {
@@ -161,21 +126,20 @@ func handleUpdate(ctx context.Context, b *bot.Bot, update *models.Update) {
 
 	if strings.HasPrefix(messageText, string(cmd.Generate)) {
 
-		prompt, err := cmd.GetPrompt(messageText)
+		params, err := cmd.GetParams(messageText)
 
 		if err != nil {
 			b.SendMessage(ctx, &bot.SendMessageParams{
 				ChatID:           chatId,
-				Text:             "Sorry, but your prompt is somehow invalid 😬",
+				Text:             fmt.Sprintf("Sorry, but your prompt is somehow invalid 😬. %s", err),
 				ReplyToMessageID: messageId,
 			})
 			log.Printf("Invalid prompt from %s: %s", user, err)
 			return
 		}
 
-		log.Printf("User %s requested %s \n", user, prompt)
+		log.Printf("User %s requested %s \n", user, params.Prompt)
 
-		// replace len(pending) by queue.Len()
 		if worker.Len() >= cfg.MAX_JOBS {
 			b.SendMessage(ctx,
 				&bot.SendMessageParams{
@@ -188,22 +152,22 @@ func handleUpdate(ctx context.Context, b *bot.Bot, update *models.Update) {
 			return
 		}
 
-		/*
-			b.SendMessage(ctx,
-			&bot.SendMessageParams{
-				ChatID:              chatId,
-				Text:                "Your request is being processed 🤖",
-				ReplyToMessageID:    messageId,
-				DisableNotification: true,
-			})
-		*/
-
 		log.Printf("User %s request accepted, job id %s", user, id)
 
-		// replace by queue.AddJob(ctx, job)
-		worker.Push(worker.Job{ChatId: chatId, Prompt: prompt, User: user, UserId: userId, MsgId: messageId, Id: id.String()})
+		if params.Seed == nil {
 
-		return
+			for i := 0; i < 5; i++ {
+				seed := rand.Intn(1000000)
+				params = cmd.Params{
+					Prompt: params.Prompt,
+					Seed:   &seed,
+				}
+				worker.Push(worker.Job{ChatId: chatId, User: user, UserId: userId, MsgId: messageId, Id: id.String(), Params: params})
+			}
+			return
+		}
+
+		worker.Push(worker.Job{ChatId: chatId, User: user, UserId: userId, MsgId: messageId, Id: id.String(), Params: params})
 	}
 
 	if strings.HasPrefix(messageText, string(cmd.Help)) {

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"scristobal/botatobot/cfg"
+	"strconv"
 	"strings"
 
 	"golang.org/x/exp/utf8string"
@@ -17,7 +18,7 @@ func validate(prompt string) bool {
 		return false
 	}
 
-	re := regexp.MustCompile(`^[\w\d\s-:.]*$`)
+	re := regexp.MustCompile(`^[\w\d\s-:_.]*$`)
 
 	return re.MatchString(prompt) && len(prompt) > 0
 }
@@ -45,7 +46,7 @@ func clean(msg string) string {
 
 	msg = removeCommands(msg)
 
-	msg = removeSubstrings(msg, []string{"\n", "\r", "\t", "\"", "'", ",", ".", "!", "?", "_"})
+	msg = removeSubstrings(msg, []string{"\n", "\r", "\t", "\"", "'", ",", ".", "!", "?"})
 
 	msg = strings.TrimSpace(msg)
 
@@ -56,15 +57,97 @@ func clean(msg string) string {
 	return msg
 }
 
-func GetPrompt(msg string) (string, error) {
+type Params struct {
+	Prompt              string
+	Seed                *int
+	Num_inference_steps *int
+	Guidance_scale      *int
+}
 
-	prompt := clean(msg)
+func (p Params) String() string {
+	res := p.Prompt
 
-	ok := validate(prompt)
-
-	if !ok {
-		return "", fmt.Errorf("invalid characters in prompt")
+	if p.Seed != nil {
+		res += fmt.Sprintf(" :seed_%d", *p.Seed)
 	}
 
-	return prompt, nil
+	if p.Num_inference_steps != nil {
+		res += fmt.Sprintf(" :steps_%d", *p.Num_inference_steps)
+	}
+
+	if p.Guidance_scale != nil {
+		res += fmt.Sprintf(" :guidance_%d", *p.Guidance_scale)
+	}
+
+	return res
+}
+
+func GetParams(msg string) (Params, error) {
+
+	msg = clean(msg)
+
+	ok := validate(msg)
+
+	if !ok {
+		return Params{}, fmt.Errorf("invalid characters in prompt")
+	}
+
+	words := strings.Split(msg, " ")
+	var input Params
+
+	for _, word := range words {
+		if word[0] == byte(':') {
+			split := strings.Split(word, "_")
+
+			if len(split) < 2 {
+				return Params{}, fmt.Errorf("invalid parameter, format should be :param_value")
+			}
+
+			key := split[0]
+			value := split[1]
+
+			switch key {
+			case ":seed":
+				seed, err := strconv.Atoi(value)
+				if err != nil {
+					return Params{}, fmt.Errorf("invalid seed, should be a number :seed_1234")
+				}
+				input.Seed = &seed
+			case ":steps":
+				steps, err := strconv.Atoi(value)
+				if err != nil {
+					return Params{}, fmt.Errorf("invalid number of inference steps, should be a number :steps_50")
+				}
+
+				if steps > 100 || steps < 1 {
+					return Params{}, fmt.Errorf("invalid number of inference steps, should be between 1 and 100 :steps_50")
+				}
+				input.Num_inference_steps = &steps
+			case ":guidance":
+				guidance, err := strconv.Atoi(value)
+				if err != nil {
+					return Params{}, fmt.Errorf("invalid guidance scale, should be a number :guidance_100")
+				}
+				if guidance > 20 || guidance < 1 {
+					return Params{}, fmt.Errorf("invalid guidance scale, should be between 1 and 20 :guidance_100")
+				}
+				input.Guidance_scale = &guidance
+
+			default:
+				return Params{}, fmt.Errorf("invalid parameter, format should be :param_value, allowed parameters are :seed_, :steps_, and :guidance_")
+			}
+
+			msg = strings.ReplaceAll(msg, word, "")
+		}
+	}
+
+	if len(msg) < 10 {
+		return Params{}, fmt.Errorf("prompt too short, should be at least 10 characters")
+	}
+
+	input.Prompt = msg
+
+	fmt.Println("prompt:", input.Prompt, "--seed:", input.Seed, "--steps:", input.Num_inference_steps, "--guidance:", input.Guidance_scale)
+
+	return input, nil
 }
