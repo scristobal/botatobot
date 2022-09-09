@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"math/rand"
 	"regexp"
 	"scristobal/botatobot/cfg"
 	"strconv"
@@ -58,49 +59,52 @@ func clean(msg string) string {
 }
 
 type Params struct {
-	Prompt              string `json:"prompt"`
-	Seed                *int   `json:"seed,omitempty"`
-	Num_inference_steps *int   `json:"num_inference_steps,omitempty"`
-	Guidance_scale      *int   `json:"guidance_scale,omitempty"`
+	Prompt              string  `json:"prompt"`
+	Seed                int     `json:"seed,omitempty"`
+	Num_inference_steps int     `json:"num_inference_steps,omitempty"`
+	Guidance_scale      float32 `json:"guidance_scale,omitempty"`
 }
 
 func (p Params) String() string {
 	res := p.Prompt
 
-	if p.Seed != nil {
-		res += fmt.Sprintf(" &seed_%d", *p.Seed)
-	}
+	res += fmt.Sprintf(" &seed_%d", p.Seed)
 
-	if p.Num_inference_steps != nil {
-		res += fmt.Sprintf(" &steps_%d", *p.Num_inference_steps)
-	}
+	res += fmt.Sprintf(" &steps_%d", p.Num_inference_steps)
 
-	if p.Guidance_scale != nil {
-		res += fmt.Sprintf(" &guidance_%d", *p.Guidance_scale)
-	}
+	res += fmt.Sprintf(" &guidance_%f", p.Guidance_scale)
+
+	res = strings.TrimSpace(res)
 
 	return res
 }
 
-func GetParams(msg string) (Params, error) {
+func GetParams(msg string) (Params, bool, error) {
 
 	msg = clean(msg)
-
 	ok := validate(msg)
 
 	if !ok {
-		return Params{}, fmt.Errorf("invalid characters in prompt")
+		return Params{}, false, fmt.Errorf("invalid characters in prompt")
+	}
+
+	hasParams := false
+
+	input := Params{
+		Prompt:              "",
+		Seed:                rand.Intn(1000000),
+		Num_inference_steps: 50,
+		Guidance_scale:      7.5,
 	}
 
 	words := strings.Split(msg, " ")
-	var input Params
 
 	for _, word := range words {
 		if word[0] == byte('&') {
 			split := strings.Split(word, "_")
 
 			if len(split) < 2 {
-				return Params{}, fmt.Errorf("invalid parameter, format should be :param_value")
+				return Params{}, hasParams, fmt.Errorf("invalid parameter, format should be :param_value")
 			}
 
 			key := split[0]
@@ -108,33 +112,36 @@ func GetParams(msg string) (Params, error) {
 
 			switch key {
 			case "&seed":
+				hasParams = true
 				seed, err := strconv.Atoi(value)
 				if err != nil {
-					return Params{}, fmt.Errorf("invalid seed, should be a number &seed_1234")
+					return Params{}, hasParams, fmt.Errorf("invalid seed, should be a number &seed_1234")
 				}
-				input.Seed = &seed
+				input.Seed = seed
 			case "&steps":
+				hasParams = true
 				steps, err := strconv.Atoi(value)
 				if err != nil {
-					return Params{}, fmt.Errorf("invalid number of inference steps, should be a number &steps_50")
+					return Params{}, hasParams, fmt.Errorf("invalid number of inference steps, should be a number &steps_50")
 				}
 
 				if steps > 100 || steps < 1 {
-					return Params{}, fmt.Errorf("invalid number of inference steps, should be between 1 and 100 &steps_50")
+					return Params{}, hasParams, fmt.Errorf("invalid number of inference steps, should be between 1 and 100 &steps_50")
 				}
-				input.Num_inference_steps = &steps
+				input.Num_inference_steps = steps
 			case "&guidance":
-				guidance, err := strconv.Atoi(value)
+				hasParams = true
+				guidance, err := strconv.ParseFloat(value, 32)
 				if err != nil {
-					return Params{}, fmt.Errorf("invalid guidance scale, should be a number &guidance_100")
+					return Params{}, hasParams, fmt.Errorf("invalid guidance scale, should be a rational number &guidance_7.5")
 				}
 				if guidance > 20 || guidance < 1 {
-					return Params{}, fmt.Errorf("invalid guidance scale, should be between 1 and 20 &guidance_100")
+					return Params{}, hasParams, fmt.Errorf("invalid guidance scale, should be between 1 and 20 &guidance_7.5")
 				}
-				input.Guidance_scale = &guidance
+				input.Guidance_scale = float32(guidance)
 
 			default:
-				return Params{}, fmt.Errorf("invalid parameter, format should be :param_value, allowed parameters are &seed_, &steps_, and &guidance_")
+				return Params{}, hasParams, fmt.Errorf("invalid parameter, format should be :param_value, allowed parameters are &seed_, &steps_, and &guidance_")
 			}
 
 			msg = strings.ReplaceAll(msg, word, "")
@@ -142,12 +149,12 @@ func GetParams(msg string) (Params, error) {
 	}
 
 	if len(msg) < 10 {
-		return Params{}, fmt.Errorf("prompt too short, should be at least 10 characters")
+		return Params{}, hasParams, fmt.Errorf("prompt too short, should be at least 10 characters")
 	}
 
 	input.Prompt = strings.TrimSpace(msg)
 
 	fmt.Println("prompt:", input.Prompt, "--seed:", input.Seed, "--steps:", input.Num_inference_steps, "--guidance:", input.Guidance_scale)
 
-	return input, nil
+	return input, hasParams, nil
 }

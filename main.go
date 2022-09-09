@@ -126,7 +126,7 @@ func handleUpdate(ctx context.Context, b *bot.Bot, update *models.Update) {
 
 	if strings.HasPrefix(messageText, string(cmd.Generate)) {
 
-		params, err := cmd.GetParams(messageText)
+		params, hasParams, err := cmd.GetParams(messageText)
 
 		if err != nil {
 			b.SendMessage(ctx, &bot.SendMessageParams{
@@ -154,14 +154,10 @@ func handleUpdate(ctx context.Context, b *bot.Bot, update *models.Update) {
 
 		log.Printf("User %s request accepted, job id %s", user, id)
 
-		if params.Seed == nil {
+		if !hasParams {
 
 			for i := 0; i < 5; i++ {
-				seed := rand.Intn(1000000)
-				params = cmd.Params{
-					Prompt: params.Prompt,
-					Seed:   &seed,
-				}
+				params.Seed = rand.Intn(1000000)
 				worker.Push(worker.Job{ChatId: chatId, User: user, UserId: userId, MsgId: messageId, Id: id.String(), Params: params})
 			}
 			return
@@ -174,7 +170,7 @@ func handleUpdate(ctx context.Context, b *bot.Bot, update *models.Update) {
 
 		b.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID: chatId,
-			Text:   "Hi! I'm a 🤖 that generates images from text. Use the /generate command follow by a prompt, like this: \n\n   /generate a cat in space \n\nBy default I will generate 5 images, but you can modify the seed, guidance and steps like so\n\n /generate a cat in space &seed_1234 &steps_50 &guidance_10\n\nCheck my status with /status\n\nHave fun!",
+			Text:   "Hi! I'm a 🤖 that generates images from text. Use the /generate command follow by a prompt, like this: \n\n   /generate a cat in space \n\nBy default I will generate 5 images, but you can modify the seed, guidance and steps like so\n\n /generate a cat in space &seed_1234 &steps_50 &guidance_7.5\n\nCheck my status with /status\n\nHave fun!",
 		})
 	}
 
