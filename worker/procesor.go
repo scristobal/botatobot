@@ -69,12 +69,25 @@ func (job Job) process(ctx context.Context) {
 	current.job = &job
 	current.mut.Unlock()
 
+	defer func() {
+		current.mut.Lock()
+		current.job = nil
+		current.mut.Unlock()
+	}()
+
 	type modelResponse struct {
 		Status string   `json:"status"`
 		Output []string `json:"output"` // (base64) data URLs
 	}
 
-	res, err := http.Post(cfg.MODEL_URL, "application/json", strings.NewReader(fmt.Sprintf(`{"input": {"prompt": "%s","seed": %d}}`, job.Params.Prompt, *job.Params.Seed)))
+	input, err := json.Marshal(job.Params)
+
+	if err != nil {
+		log.Printf("error marshaling input: %v", err)
+		return
+	}
+
+	res, err := http.Post(cfg.MODEL_URL, "application/json", strings.NewReader(fmt.Sprintf(`{"input": %s}`, input)))
 
 	if err != nil {
 		log.Printf("Error job %s while requesting model: %s\n", job.Id, err)
@@ -86,6 +99,7 @@ func (job Job) process(ctx context.Context) {
 
 	if err != nil {
 		log.Printf("Error job %s while reading model response: %s\n", job.Id, err)
+		return
 	}
 
 	response := modelResponse{}
@@ -101,6 +115,7 @@ func (job Job) process(ctx context.Context) {
 
 	if err != nil {
 		log.Printf("Error job %s while decoding model response: %s\n", job.Id, err)
+		return
 	}
 
 	imgFilePath := filepath.Join(cfg.OUTPUT_PATH, fmt.Sprintf("%s.png", job.Id))
@@ -109,12 +124,14 @@ func (job Job) process(ctx context.Context) {
 
 	if err != nil {
 		log.Printf("Error job %s while writing image: %s\n", job.Id, err)
+		return
 	}
 
 	content, err := json.Marshal(job)
 
 	if err != nil {
 		log.Printf("Error marshalling job %v", err)
+		return
 	}
 
 	jsonFilePath := filepath.Join(cfg.OUTPUT_PATH, fmt.Sprintf("%s.json", job.Id))
@@ -123,11 +140,8 @@ func (job Job) process(ctx context.Context) {
 
 	if err != nil {
 		log.Printf("Error writing meta.json of job %s: %v", job.Id, err)
+		return
 	}
-
-	current.mut.Lock()
-	current.job = nil
-	current.mut.Unlock()
 
 }
 

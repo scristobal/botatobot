@@ -131,7 +131,7 @@ func handleUpdate(ctx context.Context, b *bot.Bot, update *models.Update) {
 		if err != nil {
 			b.SendMessage(ctx, &bot.SendMessageParams{
 				ChatID:           chatId,
-				Text:             fmt.Sprintf("Sorry, but your prompt is somehow invalid 😬. %s", err),
+				Text:             fmt.Sprintf("Sorry, but your prompt is somehow invalid 😬\n\n %s", err),
 				ReplyToMessageID: messageId,
 			})
 			log.Printf("Invalid prompt from %s: %s", user, err)
@@ -174,7 +174,7 @@ func handleUpdate(ctx context.Context, b *bot.Bot, update *models.Update) {
 
 		b.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID: chatId,
-			Text:   "Hi! I'm a 🤖 that generates images from text. Use the /generate command follow by a prompt, like this: \n\n   /generate a cat in space \n\nand I'll generate a few images for you!. It can take a while, you can check my status with /status",
+			Text:   "Hi! I'm a 🤖 that generates images from text. Use the /generate command follow by a prompt, like this: \n\n   /generate a cat in space \n\nBy default I will generate 5 images, but you can modify the seed, guidance and steps like so\n\n /generate a cat in space :seed_1234 :steps_50 :guidance_10\n\nCheck my status with /status\n\nHave fun!",
 		})
 	}
 
@@ -194,9 +194,8 @@ func handleUpdate(ctx context.Context, b *bot.Bot, update *models.Update) {
 
 		if job != nil {
 			b.SendMessage(ctx, &bot.SendMessageParams{
-				ChatID:           chatId,
-				Text:             fmt.Sprintf("I am working on this message and the queue has %d more jobs", numJobs),
-				ReplyToMessageID: job.MsgId,
+				ChatID: chatId,
+				Text:   fmt.Sprintf("I am working on \"%s\" for %s and the queue has %d more jobs", job.Params, job.User, numJobs),
 			})
 			return
 		}

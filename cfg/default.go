@@ -15,7 +15,7 @@ var (
 	OUTPUT_PATH  string
 )
 
-const MAX_JOBS = 10
+const MAX_JOBS = 20
 
 func FromEnv() error {
 	err := godotenv.Load()

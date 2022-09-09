@@ -58,10 +58,10 @@ func clean(msg string) string {
 }
 
 type Params struct {
-	Prompt              string
-	Seed                *int
-	Num_inference_steps *int
-	Guidance_scale      *int
+	Prompt              string `json:"prompt"`
+	Seed                *int   `json:"seed,omitempty"`
+	Num_inference_steps *int   `json:"num_inference_steps,omitempty"`
+	Guidance_scale      *int   `json:"guidance_scale,omitempty"`
 }
 
 func (p Params) String() string {
@@ -145,7 +145,7 @@ func GetParams(msg string) (Params, error) {
 		return Params{}, fmt.Errorf("prompt too short, should be at least 10 characters")
 	}
 
-	input.Prompt = msg
+	input.Prompt = strings.TrimSpace(msg)
 
 	fmt.Println("prompt:", input.Prompt, "--seed:", input.Seed, "--steps:", input.Num_inference_steps, "--guidance:", input.Guidance_scale)
 
