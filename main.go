@@ -174,7 +174,7 @@ func handleUpdate(ctx context.Context, b *bot.Bot, update *models.Update) {
 
 		b.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID: chatId,
-			Text:   "Hi! I'm a 🤖 that generates images from text. Use the /generate command follow by a prompt, like this: \n\n   /generate a cat in space \n\nBy default I will generate 5 images, but you can modify the seed, guidance and steps like so\n\n /generate a cat in space :seed_1234 :steps_50 :guidance_10\n\nCheck my status with /status\n\nHave fun!",
+			Text:   "Hi! I'm a 🤖 that generates images from text. Use the /generate command follow by a prompt, like this: \n\n   /generate a cat in space \n\nBy default I will generate 5 images, but you can modify the seed, guidance and steps like so\n\n /generate a cat in space &seed_1234 &steps_50 &guidance_10\n\nCheck my status with /status\n\nHave fun!",
 		})
 	}
 
