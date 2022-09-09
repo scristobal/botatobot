@@ -47,7 +47,7 @@ func clean(msg string) string {
 
 	msg = removeCommands(msg)
 
-	msg = removeSubstrings(msg, []string{"\n", "\r", "\t", "\"", "'", ",", ".", "!", "?"})
+	msg = removeSubstrings(msg, []string{"\n", "\r", "\t", "\"", "'", ",", "!", "?"})
 
 	msg = strings.TrimSpace(msg)
 
@@ -72,7 +72,7 @@ func (p Params) String() string {
 
 	res += fmt.Sprintf(" &steps_%d", p.Num_inference_steps)
 
-	res += fmt.Sprintf(" &guidance_%f", p.Guidance_scale)
+	res += fmt.Sprintf(" &guidance_%.1f", p.Guidance_scale)
 
 	res = strings.TrimSpace(res)
 
@@ -135,6 +135,7 @@ func GetParams(msg string) (Params, bool, error) {
 				if err != nil {
 					return Params{}, hasParams, fmt.Errorf("invalid guidance scale, should be a rational number &guidance_7.5")
 				}
+				fmt.Println("guidance", guidance)
 				if guidance > 20 || guidance < 1 {
 					return Params{}, hasParams, fmt.Errorf("invalid guidance scale, should be between 1 and 20 &guidance_7.5")
 				}
