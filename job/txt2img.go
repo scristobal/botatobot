@@ -1,4 +1,4 @@
-package cmd
+package job
 
 import (
 	"encoding/json"
@@ -33,8 +33,13 @@ func removeSubstrings(s string, b []string) string {
 }
 
 func removeCommands(msg string) string {
-	for _, c := range commands {
-		msg = strings.ReplaceAll(msg, string(c), "")
+
+	words := strings.Split(msg, " ")
+
+	for _, w := range words {
+		if w[0] == byte('/') {
+			msg = strings.ReplaceAll(msg, w, "")
+		}
 	}
 	return msg
 }

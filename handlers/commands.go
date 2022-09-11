@@ -1,4 +1,4 @@
-package cmd
+package handlers
 
 type Command string
 
@@ -8,8 +8,6 @@ const (
 	Generate Command = "/generate"
 	Status   Command = "/status"
 )
-
-var commands = []Command{Help, Generate, Status}
 
 func (c Command) String() string {
 	switch c {
