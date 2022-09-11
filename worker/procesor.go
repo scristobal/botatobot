@@ -12,11 +12,14 @@ import (
 	"os"
 	"path/filepath"
 	"scristobal/botatobot/cfg"
-	"scristobal/botatobot/cmd"
 	"strings"
 	"sync"
 	"time"
 )
+
+type serializable interface {
+	ToJSON() ([]byte, error)
+}
 
 type Job struct {
 	Id     string
@@ -24,7 +27,7 @@ type Job struct {
 	User   string
 	UserId int
 	MsgId  int
-	Params cmd.Params
+	Params serializable
 	Type   string
 }
 
@@ -80,7 +83,7 @@ func (job Job) process(ctx context.Context) {
 		Output []string `json:"output"` // (base64) data URLs
 	}
 
-	input, err := json.Marshal(job.Params)
+	input, err := job.Params.ToJSON()
 
 	if err != nil {
 		log.Printf("error marshaling input: %v", err)

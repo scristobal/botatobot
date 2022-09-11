@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"regexp"
@@ -63,6 +64,11 @@ type Params struct {
 	Seed                int     `json:"seed,omitempty"`
 	Num_inference_steps int     `json:"num_inference_steps,omitempty"`
 	Guidance_scale      float32 `json:"guidance_scale,omitempty"`
+}
+
+func (params Params) ToJSON() ([]byte, error) {
+
+	return json.Marshal(params)
 }
 
 func (p Params) String() string {
