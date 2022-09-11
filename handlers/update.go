@@ -12,7 +12,7 @@ import (
 	"net/http"
 	"os"
 	"scristobal/botatobot/cfg"
-	"scristobal/botatobot/job"
+	"scristobal/botatobot/jobs"
 	"scristobal/botatobot/queue"
 	"strings"
 
@@ -20,6 +20,28 @@ import (
 	"github.com/go-telegram/bot/models"
 	"github.com/google/uuid"
 )
+
+type Command string
+
+// commands
+const (
+	Help     Command = "/help"
+	Generate Command = "/generate"
+	Status   Command = "/status"
+)
+
+func (c Command) String() string {
+	switch c {
+	case Help:
+		return "Get Help, usage /help"
+	case Generate:
+		return "Generate a image from a prompt, usage /generate <prompt>"
+	case Status:
+		return "Check bot status, usage /status"
+	}
+
+	return "Unknown command"
+}
 
 func Update(ctx context.Context, b *bot.Bot, update *models.Update) {
 
@@ -50,7 +72,7 @@ func Update(ctx context.Context, b *bot.Bot, update *models.Update) {
 
 	if strings.HasPrefix(messageText, string(Generate)) {
 
-		params, hasParams, err := job.GetParams(messageText)
+		params, hasParams, err := jobs.GetParams(messageText)
 
 		if err != nil {
 			b.SendMessage(ctx, &bot.SendMessageParams{
@@ -82,12 +104,12 @@ func Update(ctx context.Context, b *bot.Bot, update *models.Update) {
 
 			for i := 0; i < 5; i++ {
 				params.Seed = rand.Intn(1000000)
-				queue.Push(queue.Job{ChatId: chatId, User: user, UserId: userId, MsgId: messageId, Id: id.String(), Params: params})
+				queue.Push(jobs.Txt2img{ChatId: chatId, User: user, UserId: userId, MsgId: messageId, Id: id.String(), Params: params})
 			}
 			return
 		}
 
-		queue.Push(queue.Job{ChatId: chatId, User: user, UserId: userId, MsgId: messageId, Id: id.String(), Params: params})
+		queue.Push(jobs.Txt2img{ChatId: chatId, User: user, UserId: userId, MsgId: messageId, Id: id.String(), Params: params})
 	}
 
 	if strings.HasPrefix(messageText, string(Help)) {
@@ -113,6 +135,9 @@ func Update(ctx context.Context, b *bot.Bot, update *models.Update) {
 		}
 
 		if job != nil {
+
+			job := (*job).(jobs.Txt2img)
+
 			b.SendMessage(ctx, &bot.SendMessageParams{
 				ChatID: chatId,
 				Text:   fmt.Sprintf("I am working on \"%s\" for %s and the queue has %d more jobs", job.Params, job.User, numJobs),

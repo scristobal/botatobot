@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"scristobal/botatobot/cfg"
+	"scristobal/botatobot/jobs"
 	"scristobal/botatobot/queue"
 
 	"github.com/go-telegram/bot"
@@ -16,26 +17,28 @@ import (
 
 func Job(ctx context.Context, b *bot.Bot, job *queue.Job) {
 
-	imgPath := filepath.Join(cfg.OUTPUT_PATH, job.Id+".png")
+	details := (*job).(jobs.Txt2img)
+
+	imgPath := filepath.Join(cfg.OUTPUT_PATH, details.Id+".png")
 	imgContent, err := os.ReadFile(imgPath)
 
 	if err != nil {
-		log.Printf("Error job %s no file found\n", job.Id)
+		log.Printf("Error job %s no file found\n", details.Id)
 
 		b.SendMessage(ctx, &bot.SendMessageParams{
-			ChatID:           job.ChatId,
+			ChatID:           details.ChatId,
 			Text:             "Sorry, but something went wrong when running the model 😭",
-			ReplyToMessageID: job.MsgId,
+			ReplyToMessageID: details.MsgId,
 		})
 
 		return
 	}
 
-	log.Println("Success. Sending file from: ", job.Id)
+	log.Println("Success. Sending file from: ", details.Id)
 
 	b.SendPhoto(ctx, &bot.SendPhotoParams{
-		ChatID:  job.ChatId,
-		Caption: fmt.Sprint(job.Params),
+		ChatID:  details.ChatId,
+		Caption: fmt.Sprint(details.Params),
 		Photo: &models.InputFileUpload{
 			Data:     bytes.NewReader(imgContent),
 			Filename: filepath.Base(imgPath),

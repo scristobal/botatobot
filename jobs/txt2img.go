@@ -1,9 +1,15 @@
-package job
+package jobs
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
+	"log"
 	"math/rand"
+	"net/http"
+	"os"
+	"path/filepath"
 	"regexp"
 	"scristobal/botatobot/cfg"
 	"strconv"
@@ -11,6 +17,28 @@ import (
 
 	"golang.org/x/exp/utf8string"
 )
+
+type Params struct {
+	Prompt              string  `json:"prompt"`
+	Seed                int     `json:"seed,omitempty"`
+	Num_inference_steps int     `json:"num_inference_steps,omitempty"`
+	Guidance_scale      float32 `json:"guidance_scale,omitempty"`
+}
+
+type Txt2img struct {
+	Id     string
+	ChatId int
+	User   string
+	UserId int
+	MsgId  int
+	Params Params
+	Type   string
+}
+
+type modelResponse struct {
+	Status string   `json:"status"`
+	Output []string `json:"output"` // (base64) data URLs
+}
 
 func validate(prompt string) bool {
 
@@ -44,12 +72,19 @@ func removeCommands(msg string) string {
 	return msg
 }
 
-func removeBotName(msg string) string {
-	return strings.ReplaceAll(msg, cfg.BOT_USERNAME, "")
+func removeMentions(msg string) string {
+	words := strings.Split(msg, " ")
+
+	for _, w := range words {
+		if w[0] == byte('@') {
+			msg = strings.ReplaceAll(msg, w, "")
+		}
+	}
+	return msg
 }
 
 func clean(msg string) string {
-	msg = removeBotName(msg)
+	msg = removeMentions(msg)
 
 	msg = removeCommands(msg)
 
@@ -62,18 +97,6 @@ func clean(msg string) string {
 	msg = reg.ReplaceAllString(msg, " ")
 
 	return msg
-}
-
-type Params struct {
-	Prompt              string  `json:"prompt"`
-	Seed                int     `json:"seed,omitempty"`
-	Num_inference_steps int     `json:"num_inference_steps,omitempty"`
-	Guidance_scale      float32 `json:"guidance_scale,omitempty"`
-}
-
-func (params Params) ToJSON() ([]byte, error) {
-
-	return json.Marshal(params)
 }
 
 func (p Params) String() string {
@@ -169,4 +192,70 @@ func GetParams(msg string) (Params, bool, error) {
 	fmt.Println("prompt:", input.Prompt, "--seed:", input.Seed, "--steps:", input.Num_inference_steps, "--guidance:", input.Guidance_scale)
 
 	return input, hasParams, nil
+}
+
+func (job Txt2img) Run() {
+
+	input, err := json.Marshal(job.Params)
+
+	if err != nil {
+		log.Printf("error marshaling input: %v", err)
+		return
+	}
+
+	res, err := http.Post(cfg.MODEL_URL, "application/json", strings.NewReader(fmt.Sprintf(`{"input": %s}`, input)))
+
+	if err != nil {
+		log.Printf("Error job %s while requesting model: %s\n", job.Id, err)
+	}
+
+	defer res.Body.Close()
+
+	body, err := io.ReadAll(res.Body)
+
+	if err != nil {
+		log.Printf("Error job %s while reading model response: %s\n", job.Id, err)
+		return
+	}
+
+	response := modelResponse{}
+
+	json.Unmarshal(body, &response)
+
+	output := response.Output[0]
+
+	// remove the data URL prefix
+	data := strings.SplitAfter(output, ",")[1]
+
+	decoded, err := base64.StdEncoding.DecodeString(data)
+
+	if err != nil {
+		log.Printf("Error job %s while decoding model response: %s\n", job.Id, err)
+		return
+	}
+
+	imgFilePath := filepath.Join(cfg.OUTPUT_PATH, fmt.Sprintf("%s.png", job.Id))
+
+	err = os.WriteFile(imgFilePath, decoded, 0644)
+
+	if err != nil {
+		log.Printf("Error job %s while writing image: %s\n", job.Id, err)
+		return
+	}
+
+	content, err := json.Marshal(job)
+
+	if err != nil {
+		log.Printf("Error marshalling job %v", err)
+		return
+	}
+
+	jsonFilePath := filepath.Join(cfg.OUTPUT_PATH, fmt.Sprintf("%s.json", job.Id))
+
+	err = os.WriteFile(jsonFilePath, content, 0644)
+
+	if err != nil {
+		log.Printf("Error writing meta.json of job %s: %v", job.Id, err)
+		return
+	}
 }
