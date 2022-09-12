@@ -2,34 +2,31 @@ package worker
 
 import (
 	"fmt"
-	"scristobal/botatobot/jobs"
+	"scristobal/botatobot/tasks"
 
+	"github.com/go-telegram/bot/models"
 	"github.com/google/uuid"
 )
 
-type Requester struct {
-	ChatId int
-	User   string
-	UserId int
-	MsgId  int
-	Msg    string
-}
-
 type Request struct {
-	Id        uuid.UUID
-	Requester Requester
-	Jobs      []jobs.Txt2img
+	tasks.Txt2img
+	Id  uuid.UUID
+	Msg *models.Message
 }
 
-func New(r Requester) (Request, error) {
+func New(m models.Message) ([]Request, error) {
 
-	id := uuid.New()
-
-	jobs, err := jobs.FromString(r.Msg)
+	jobs, err := tasks.FromString(m.Text)
 
 	if err != nil {
-		return Request{}, fmt.Errorf("failed to create request: %s", err)
+		return nil, fmt.Errorf("failed to create request: %s", err)
 	}
 
-	return Request{Id: id, Requester: r, Jobs: jobs}, nil
+	var requests []Request
+
+	for _, job := range jobs {
+		requests = append(requests, Request{job, uuid.New(), &m})
+	}
+
+	return requests, nil
 }

@@ -1,4 +1,4 @@
-package jobs
+package tasks
 
 import (
 	"encoding/base64"
@@ -20,8 +20,8 @@ type Txt2img struct {
 	Seed                int     `json:"seed,omitempty"`
 	Num_inference_steps int     `json:"num_inference_steps,omitempty"`
 	Guidance_scale      float32 `json:"guidance_scale,omitempty"`
-	Result              []byte
-	Error               error
+	Result              []byte  `json:"-"` // not serialized
+	Error               error   `json:"error,omitempty"`
 }
 
 type apiResponse struct {

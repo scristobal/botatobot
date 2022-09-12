@@ -17,54 +17,50 @@ import (
 
 func Request(ctx context.Context, b *bot.Bot, req *worker.Request) {
 
-	requester := req.Requester
+	message := req.Msg
 
-	for _, job := range req.Jobs {
+	if req.Error != nil {
+		log.Printf("there was a problem running the task %s", req.Error)
 
-		if job.Error != nil {
-			log.Printf("Error job %s no file found\n", req.Id)
-
-			b.SendMessage(ctx, &bot.SendMessageParams{
-				ChatID:           requester.ChatId,
-				Text:             "Sorry, but something went wrong when running the model 😭",
-				ReplyToMessageID: requester.MsgId,
-			})
-
-			return
-		}
-
-		b.SendPhoto(ctx, &bot.SendPhotoParams{
-			ChatID:  requester.ChatId,
-			Caption: fmt.Sprint(job.String()),
-			Photo: &models.InputFileUpload{
-				Data:     bytes.NewReader(job.Result),
-				Filename: filepath.Base(fmt.Sprintf("%s.png", req.Id)),
-			},
-			DisableNotification: true,
+		b.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID:           message.Chat.ID,
+			Text:             fmt.Sprintf("Sorry, but something went wrong when running the model 😭 %s", req.Error),
+			ReplyToMessageID: message.ID,
 		})
 
-		imgFilePath := filepath.Join(cfg.OUTPUT_PATH, fmt.Sprintf("%s.png", req.Id))
+		return
+	}
 
-		err := os.WriteFile(imgFilePath, job.Result, 0644)
+	b.SendPhoto(ctx, &bot.SendPhotoParams{
+		ChatID:  message.Chat.ID,
+		Caption: fmt.Sprint(req),
+		Photo: &models.InputFileUpload{
+			Data:     bytes.NewReader(req.Result),
+			Filename: filepath.Base(fmt.Sprintf("%s.png", req.Id)),
+		},
+		DisableNotification: true,
+	})
 
-		if err != nil {
-			log.Printf("can't write image to disc: %s\n", err)
-		}
+	imgFilePath := filepath.Join(cfg.OUTPUT_PATH, fmt.Sprintf("%s.png", req.Id))
 
-		content, err := json.Marshal(req)
+	err := os.WriteFile(imgFilePath, req.Result, 0644)
 
-		if err != nil {
-			log.Printf("failed to serialize job parameters: %s\n", err)
-		}
+	if err != nil {
+		log.Printf("can't write image to disc: %s\n", err)
+	}
 
-		jsonFilePath := filepath.Join(cfg.OUTPUT_PATH, fmt.Sprintf("%s.json", req.Id))
+	content, err := json.Marshal(req)
 
-		err = os.WriteFile(jsonFilePath, content, 0644)
+	if err != nil {
+		log.Printf("failed to serialize job parameters: %s\n", err)
+	}
 
-		if err != nil {
-			log.Printf("error writing metadata: %s", err)
-		}
+	jsonFilePath := filepath.Join(cfg.OUTPUT_PATH, fmt.Sprintf("%s.json", req.Id))
 
+	err = os.WriteFile(jsonFilePath, content, 0644)
+
+	if err != nil {
+		log.Printf("error writing metadata: %s", err)
 	}
 
 }

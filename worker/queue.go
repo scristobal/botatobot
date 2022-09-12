@@ -19,8 +19,8 @@ type CurrentJob struct {
 }
 
 var (
-	pending chan Job // change to request
-	done    chan Job //change to results, method? .Get()?
+	pending chan Job
+	done    chan Job
 	current CurrentJob
 )
 

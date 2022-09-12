@@ -58,55 +58,47 @@ func Update(ctx context.Context, b *bot.Bot, update *models.Update) {
 
 	m := update.Message.Text
 
-	requester := worker.Requester{
-		Msg:    update.Message.Text,
-		MsgId:  update.Message.ID,
-		ChatId: update.Message.Chat.ID,
-		User:   update.Message.From.Username,
-		UserId: update.Message.From.ID,
-	}
-
 	id := uuid.New()
 
 	if strings.HasPrefix(m, string(Generate)) {
 
-		req, err := worker.New(requester)
+		requests, err := worker.New(*message)
 
 		if err != nil {
 			b.SendMessage(ctx, &bot.SendMessageParams{
-				ChatID:           requester.ChatId,
+				ChatID:           message.Chat.ID,
 				Text:             fmt.Sprintf("Sorry, but your request is somehow invalid 😬\n\n %s", err),
-				ReplyToMessageID: requester.MsgId,
+				ReplyToMessageID: message.ID,
 			})
-			log.Printf("User %s requested %s but rejected", requester.User, err)
+			log.Printf("User %s requested %s but rejected", message.From.Username, err)
 			return
 		}
 
-		log.Printf("User %s requested %s accepted\n", requester.User, id)
+		log.Printf("User %s requested %s accepted\n", message.From.Username, id)
 
 		if worker.Len() >= cfg.MAX_JOBS {
 			b.SendMessage(ctx,
 				&bot.SendMessageParams{
-					ChatID:           requester.ChatId,
+					ChatID:           message.Chat.ID,
 					Text:             "Sorry, but the job queue reached its maximum, try again later 🙄",
-					ReplyToMessageID: requester.MsgId,
+					ReplyToMessageID: message.ID,
 				})
 
-			log.Println("User", requester.User, "request rejected, queue full")
+			log.Println("User", message.From.Username, "request rejected, queue full")
 			return
 		}
 
-		log.Printf("User %s request accepted, job id %s", requester.User, id)
+		log.Printf("User %s request accepted, job id %s", message.From.Username, id)
 
-		for _, job := range req.Jobs {
-			worker.Push(&job)
+		for _, req := range requests {
+			worker.Push(&req)
 		}
 	}
 
 	if strings.HasPrefix(m, string(Help)) {
 
 		b.SendMessage(ctx, &bot.SendMessageParams{
-			ChatID: requester.ChatId,
+			ChatID: message.Chat.ID,
 			Text:   "Hi! I'm a 🤖 that generates images from text. Use the /generate command follow by a prompt, like this: \n\n   /generate a cat in space \n\nBy default I will generate 5 images, but you can modify the seed, guidance and steps like so\n\n /generate a cat in space &seed_1234 &steps_50 &guidance_7.5\n\nCheck my status with /status\n\nHave fun!",
 		})
 	}
@@ -119,7 +111,7 @@ func Update(ctx context.Context, b *bot.Bot, update *models.Update) {
 
 		if job == nil && numJobs == 0 {
 			b.SendMessage(ctx, &bot.SendMessageParams{
-				ChatID: requester.ChatId,
+				ChatID: message.Chat.ID,
 				Text:   "I am doing nothing and there are no jobs in the queue 🤖",
 			})
 			return
@@ -128,7 +120,7 @@ func Update(ctx context.Context, b *bot.Bot, update *models.Update) {
 		if job != nil {
 
 			b.SendMessage(ctx, &bot.SendMessageParams{
-				ChatID: requester.ChatId,
+				ChatID: message.Chat.ID,
 				Text:   fmt.Sprintf("I am generating an image and the queue has %d more jobs", numJobs),
 			})
 			return
@@ -136,7 +128,7 @@ func Update(ctx context.Context, b *bot.Bot, update *models.Update) {
 
 		if numJobs > 0 {
 			b.SendMessage(ctx, &bot.SendMessageParams{
-				ChatID: requester.ChatId,
+				ChatID: message.Chat.ID,
 				Text:   fmt.Sprintf("I am doing nothing and the queue has %d more jobs. That's weird!! ", numJobs),
 			})
 			return
@@ -210,7 +202,7 @@ func Update(ctx context.Context, b *bot.Bot, update *models.Update) {
 		msg, err := b.SendVideo(
 			ctx,
 			&bot.SendVideoParams{
-				ChatID:  requester.ChatId,
+				ChatID:  message.Chat.ID,
 				Caption: "Test video",
 				Video:   &models.InputFileUpload{Filename: "sample.mp4", Data: bytes.NewReader(decoded)},
 			})

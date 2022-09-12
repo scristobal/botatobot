@@ -34,7 +34,7 @@ func main() {
 
 	b := bot.New(cfg.BOT_TOKEN, opts...)
 
-	log.Println("Initializing job queue...")
+	log.Println("Initializing work queue...")
 
 	worker.Init(ctx)
 
@@ -44,8 +44,8 @@ func main() {
 			case <-ctx.Done():
 				return
 			default:
-				job := worker.Pop()
-				handlers.Request(ctx, b, &job)
+				req := worker.Pop().(*worker.Request)
+				handlers.Request(ctx, b, req)
 			}
 		}
 	}()
