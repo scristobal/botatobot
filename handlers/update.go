@@ -8,12 +8,10 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"math/rand"
 	"net/http"
 	"os"
 	"scristobal/botatobot/cfg"
-	"scristobal/botatobot/jobs"
-	"scristobal/botatobot/queue"
+	"scristobal/botatobot/worker"
 	"strings"
 
 	"github.com/go-telegram/bot"
@@ -58,77 +56,70 @@ func Update(ctx context.Context, b *bot.Bot, update *models.Update) {
 		return
 	}
 
-	messageText := update.Message.Text
-	messageId := update.Message.ID
+	m := update.Message.Text
 
-	chat := update.Message.Chat
-
-	chatId := chat.ID
-
-	user := update.Message.From.Username
-	userId := update.Message.From.ID
+	requester := worker.Requester{
+		Msg:    update.Message.Text,
+		MsgId:  update.Message.ID,
+		ChatId: update.Message.Chat.ID,
+		User:   update.Message.From.Username,
+		UserId: update.Message.From.ID,
+	}
 
 	id := uuid.New()
 
-	if strings.HasPrefix(messageText, string(Generate)) {
+	if strings.HasPrefix(m, string(Generate)) {
 
-		params, hasParams, err := jobs.GetParams(messageText)
+		req, err := worker.New(requester)
 
 		if err != nil {
 			b.SendMessage(ctx, &bot.SendMessageParams{
-				ChatID:           chatId,
-				Text:             fmt.Sprintf("Sorry, but your prompt is somehow invalid 😬\n\n %s", err),
-				ReplyToMessageID: messageId,
+				ChatID:           requester.ChatId,
+				Text:             fmt.Sprintf("Sorry, but your request is somehow invalid 😬\n\n %s", err),
+				ReplyToMessageID: requester.MsgId,
 			})
-			log.Printf("Invalid prompt from %s: %s", user, err)
+			log.Printf("User %s requested %s but rejected", requester.User, err)
 			return
 		}
 
-		log.Printf("User %s requested %s \n", user, params.Prompt)
+		log.Printf("User %s requested %s accepted\n", requester.User, id)
 
-		if queue.Len() >= cfg.MAX_JOBS {
+		if worker.Len() >= cfg.MAX_JOBS {
 			b.SendMessage(ctx,
 				&bot.SendMessageParams{
-					ChatID:           chatId,
+					ChatID:           requester.ChatId,
 					Text:             "Sorry, but the job queue reached its maximum, try again later 🙄",
-					ReplyToMessageID: messageId,
+					ReplyToMessageID: requester.MsgId,
 				})
 
-			log.Println("User", user, "request rejected, queue full")
+			log.Println("User", requester.User, "request rejected, queue full")
 			return
 		}
 
-		log.Printf("User %s request accepted, job id %s", user, id)
+		log.Printf("User %s request accepted, job id %s", requester.User, id)
 
-		if !hasParams {
-
-			for i := 0; i < 5; i++ {
-				params.Seed = rand.Intn(1000000)
-				queue.Push(jobs.Txt2img{ChatId: chatId, User: user, UserId: userId, MsgId: messageId, Id: id.String(), Params: params})
-			}
-			return
+		for _, job := range req.Jobs {
+			worker.Push(&job)
 		}
-
-		queue.Push(jobs.Txt2img{ChatId: chatId, User: user, UserId: userId, MsgId: messageId, Id: id.String(), Params: params})
 	}
 
-	if strings.HasPrefix(messageText, string(Help)) {
+	if strings.HasPrefix(m, string(Help)) {
 
 		b.SendMessage(ctx, &bot.SendMessageParams{
-			ChatID: chatId,
+			ChatID: requester.ChatId,
 			Text:   "Hi! I'm a 🤖 that generates images from text. Use the /generate command follow by a prompt, like this: \n\n   /generate a cat in space \n\nBy default I will generate 5 images, but you can modify the seed, guidance and steps like so\n\n /generate a cat in space &seed_1234 &steps_50 &guidance_7.5\n\nCheck my status with /status\n\nHave fun!",
 		})
 	}
 
-	if strings.HasPrefix(messageText, string(Status)) {
+	if strings.HasPrefix(m, string(Status)) {
 
-		job := queue.Current()
+		job := worker.Current()
 
-		numJobs := queue.Len()
+		numJobs := worker.Len()
 
 		if job == nil && numJobs == 0 {
 			b.SendMessage(ctx, &bot.SendMessageParams{
-				ChatID: chatId,
+				ChatID: requester.ChatId,
 				Text:   "I am doing nothing and there are no jobs in the queue 🤖",
 			})
 			return
@@ -136,27 +127,25 @@ func Update(ctx context.Context, b *bot.Bot, update *models.Update) {
 
 		if job != nil {
 
-			job := (*job).(jobs.Txt2img)
-
 			b.SendMessage(ctx, &bot.SendMessageParams{
-				ChatID: chatId,
-				Text:   fmt.Sprintf("I am working on \"%s\" for %s and the queue has %d more jobs", job.Params, job.User, numJobs),
+				ChatID: requester.ChatId,
+				Text:   fmt.Sprintf("I am generating an image and the queue has %d more jobs", numJobs),
 			})
 			return
 		}
 
 		if numJobs > 0 {
 			b.SendMessage(ctx, &bot.SendMessageParams{
-				ChatID: chatId,
+				ChatID: requester.ChatId,
 				Text:   fmt.Sprintf("I am doing nothing and the queue has %d more jobs. That's weird!! ", numJobs),
 			})
 			return
 		}
 	}
 
-	if strings.HasPrefix(messageText, "/video-test") {
+	if strings.HasPrefix(m, "/video-test") {
 
-		prompt := strings.ReplaceAll(messageText, "/video-test", "")
+		prompt := strings.ReplaceAll(m, "/video-test", "")
 
 		host := "http://127.0.0.1:5000/predictions"
 
@@ -221,7 +210,7 @@ func Update(ctx context.Context, b *bot.Bot, update *models.Update) {
 		msg, err := b.SendVideo(
 			ctx,
 			&bot.SendVideoParams{
-				ChatID:  chatId,
+				ChatID:  requester.ChatId,
 				Caption: "Test video",
 				Video:   &models.InputFileUpload{Filename: "sample.mp4", Data: bytes.NewReader(decoded)},
 			})

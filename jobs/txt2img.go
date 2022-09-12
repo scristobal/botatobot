@@ -5,11 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"math/rand"
 	"net/http"
-	"os"
-	"path/filepath"
 	"regexp"
 	"scristobal/botatobot/cfg"
 	"strconv"
@@ -18,24 +15,16 @@ import (
 	"golang.org/x/exp/utf8string"
 )
 
-type Params struct {
+type Txt2img struct {
 	Prompt              string  `json:"prompt"`
 	Seed                int     `json:"seed,omitempty"`
 	Num_inference_steps int     `json:"num_inference_steps,omitempty"`
 	Guidance_scale      float32 `json:"guidance_scale,omitempty"`
+	Result              []byte
+	Error               error
 }
 
-type Txt2img struct {
-	Id     string
-	ChatId int
-	User   string
-	UserId int
-	MsgId  int
-	Params Params
-	Type   string
-}
-
-type modelResponse struct {
+type apiResponse struct {
 	Status string   `json:"status"`
 	Output []string `json:"output"` // (base64) data URLs
 }
@@ -60,85 +49,80 @@ func removeSubstrings(s string, b []string) string {
 	return s
 }
 
-func removeCommands(msg string) string {
+func removeCommands(m string) string {
 
-	words := strings.Split(msg, " ")
+	words := strings.Split(m, " ")
 
 	for _, w := range words {
 		if w[0] == byte('/') {
-			msg = strings.ReplaceAll(msg, w, "")
+			m = strings.ReplaceAll(m, w, "")
 		}
 	}
-	return msg
+	return m
 }
 
-func removeMentions(msg string) string {
-	words := strings.Split(msg, " ")
+func removeMentions(m string) string {
+	words := strings.Split(m, " ")
 
 	for _, w := range words {
 		if w[0] == byte('@') {
-			msg = strings.ReplaceAll(msg, w, "")
+			m = strings.ReplaceAll(m, w, "")
 		}
 	}
-	return msg
+	return m
 }
 
-func clean(msg string) string {
-	msg = removeMentions(msg)
+func clean(m string) string {
+	m = removeMentions(m)
 
-	msg = removeCommands(msg)
+	m = removeCommands(m)
 
-	msg = removeSubstrings(msg, []string{"\n", "\r", "\t", "\"", "'", ",", "!", "?"})
+	m = removeSubstrings(m, []string{"\n", "\r", "\t", "\"", "'", ",", "!", "?"})
 
-	msg = strings.TrimSpace(msg)
+	m = strings.TrimSpace(m)
 
 	// removes consecutive spaces
 	reg := regexp.MustCompile(`\s+`)
-	msg = reg.ReplaceAllString(msg, " ")
+	m = reg.ReplaceAllString(m, " ")
 
-	return msg
+	return m
 }
 
-func (p Params) String() string {
-	res := p.Prompt
+func (j Txt2img) String() string {
 
-	res += fmt.Sprintf(" &seed_%d", p.Seed)
-
-	res += fmt.Sprintf(" &steps_%d", p.Num_inference_steps)
-
-	res += fmt.Sprintf(" &guidance_%.1f", p.Guidance_scale)
+	res := fmt.Sprintf("%s &seed_%d &steps_%d &guidance_%1.f", j.Prompt, j.Seed, j.Num_inference_steps, j.Guidance_scale)
 
 	res = strings.TrimSpace(res)
 
 	return res
 }
 
-func GetParams(msg string) (Params, bool, error) {
+func FromString(s string) ([]Txt2img, error) {
 
-	msg = clean(msg)
-	ok := validate(msg)
+	s = clean(s)
+	ok := validate(s)
 
 	if !ok {
-		return Params{}, false, fmt.Errorf("invalid characters in prompt")
+		return []Txt2img{}, fmt.Errorf("invalid characters in prompt")
 	}
 
-	hasParams := false
+	hasSeed := false
 
-	input := Params{
+	defaultJob := Txt2img{
 		Prompt:              "",
 		Seed:                rand.Intn(1000000),
 		Num_inference_steps: 50,
 		Guidance_scale:      7.5,
 	}
 
-	words := strings.Split(msg, " ")
+	words := strings.Split(s, " ")
 
 	for _, word := range words {
 		if word[0] == byte('&') {
 			split := strings.Split(word, "_")
 
 			if len(split) < 2 {
-				return Params{}, hasParams, fmt.Errorf("invalid parameter, format should be :param_value")
+				return []Txt2img{}, fmt.Errorf("invalid parameter, format should be :param_value")
 			}
 
 			key := split[0]
@@ -146,67 +130,83 @@ func GetParams(msg string) (Params, bool, error) {
 
 			switch key {
 			case "&seed":
-				hasParams = true
 				seed, err := strconv.Atoi(value)
 				if err != nil {
-					return Params{}, hasParams, fmt.Errorf("invalid seed, should be a number &seed_1234")
+					return []Txt2img{}, fmt.Errorf("invalid seed, should be a number &seed_1234")
 				}
-				input.Seed = seed
+				defaultJob.Seed = seed
+				hasSeed = true
 			case "&steps":
-				hasParams = true
 				steps, err := strconv.Atoi(value)
 				if err != nil {
-					return Params{}, hasParams, fmt.Errorf("invalid number of inference steps, should be a number &steps_50")
+					return []Txt2img{}, fmt.Errorf("invalid number of inference steps, should be a number &steps_50")
 				}
 
 				if steps > 100 || steps < 1 {
-					return Params{}, hasParams, fmt.Errorf("invalid number of inference steps, should be between 1 and 100 &steps_50")
+					return []Txt2img{}, fmt.Errorf("invalid number of inference steps, should be between 1 and 100 &steps_50")
 				}
-				input.Num_inference_steps = steps
+
+				defaultJob.Num_inference_steps = steps
 			case "&guidance":
-				hasParams = true
 				guidance, err := strconv.ParseFloat(value, 32)
 				if err != nil {
-					return Params{}, hasParams, fmt.Errorf("invalid guidance scale, should be a rational number &guidance_7.5")
+					return []Txt2img{}, fmt.Errorf("invalid guidance scale, should be a rational number &guidance_7.5")
 				}
 				fmt.Println("guidance", guidance)
 				if guidance > 20 || guidance < 1 {
-					return Params{}, hasParams, fmt.Errorf("invalid guidance scale, should be between 1 and 20 &guidance_7.5")
+					return []Txt2img{}, fmt.Errorf("invalid guidance scale, should be between 1 and 20 &guidance_7.5")
+
 				}
-				input.Guidance_scale = float32(guidance)
+				defaultJob.Guidance_scale = float32(guidance)
 
 			default:
-				return Params{}, hasParams, fmt.Errorf("invalid parameter, format should be :param_value, allowed parameters are &seed_, &steps_, and &guidance_")
+				return []Txt2img{}, fmt.Errorf("invalid parameter, format should be :param_value, allowed parameters are &seed_, &steps_, and &guidance_")
 			}
 
-			msg = strings.ReplaceAll(msg, word, "")
+			s = strings.ReplaceAll(s, word, "")
 		}
 	}
 
-	if len(msg) < 10 {
-		return Params{}, hasParams, fmt.Errorf("prompt too short, should be at least 10 characters")
+	if len(s) < 10 {
+		return []Txt2img{}, fmt.Errorf("prompt too short, should be at least 10 characters")
 	}
 
-	input.Prompt = strings.TrimSpace(msg)
+	defaultJob.Prompt = strings.TrimSpace(s)
 
-	fmt.Println("prompt:", input.Prompt, "--seed:", input.Seed, "--steps:", input.Num_inference_steps, "--guidance:", input.Guidance_scale)
+	if hasSeed {
+		return []Txt2img{defaultJob}, nil
+	}
 
-	return input, hasParams, nil
+	var jobs []Txt2img
+
+	for i := 0; i < 5; i++ {
+
+		jobs = append(jobs, Txt2img{
+			Seed:                rand.Intn(1_000_00),
+			Prompt:              defaultJob.Prompt,
+			Num_inference_steps: defaultJob.Num_inference_steps,
+			Guidance_scale:      defaultJob.Guidance_scale,
+		})
+
+	}
+
+	return jobs, nil
 }
 
-func (job Txt2img) Run() {
+func (j *Txt2img) Run() {
 
-	input, err := json.Marshal(job.Params)
+	input, err := json.Marshal(j)
 
 	if err != nil {
-		log.Printf("error marshaling input: %v", err)
+		j.Error = fmt.Errorf("fail to serialize job parameters: %v", err)
 		return
 	}
 
 	res, err := http.Post(cfg.MODEL_URL, "application/json", strings.NewReader(fmt.Sprintf(`{"input": %s}`, input)))
 
 	if err != nil {
-		log.Printf("Error job %s while requesting model: %s\n", job.Id, err)
+		j.Error = fmt.Errorf("failed to run the model: %s", err)
+		return
 	}
 
 	defer res.Body.Close()
@@ -214,11 +214,11 @@ func (job Txt2img) Run() {
 	body, err := io.ReadAll(res.Body)
 
 	if err != nil {
-		log.Printf("Error job %s while reading model response: %s\n", job.Id, err)
+		j.Error = fmt.Errorf("can't read model response: %s", err)
 		return
 	}
 
-	response := modelResponse{}
+	response := apiResponse{}
 
 	json.Unmarshal(body, &response)
 
@@ -230,32 +230,13 @@ func (job Txt2img) Run() {
 	decoded, err := base64.StdEncoding.DecodeString(data)
 
 	if err != nil {
-		log.Printf("Error job %s while decoding model response: %s\n", job.Id, err)
+		j.Error = fmt.Errorf("can't decode model response: %s", err)
 		return
 	}
 
-	imgFilePath := filepath.Join(cfg.OUTPUT_PATH, fmt.Sprintf("%s.png", job.Id))
+	j.Result = decoded
+}
 
-	err = os.WriteFile(imgFilePath, decoded, 0644)
-
-	if err != nil {
-		log.Printf("Error job %s while writing image: %s\n", job.Id, err)
-		return
-	}
-
-	content, err := json.Marshal(job)
-
-	if err != nil {
-		log.Printf("Error marshalling job %v", err)
-		return
-	}
-
-	jsonFilePath := filepath.Join(cfg.OUTPUT_PATH, fmt.Sprintf("%s.json", job.Id))
-
-	err = os.WriteFile(jsonFilePath, content, 0644)
-
-	if err != nil {
-		log.Printf("Error writing meta.json of job %s: %v", job.Id, err)
-		return
-	}
+func (j Txt2img) Read() []byte {
+	return j.Result
 }

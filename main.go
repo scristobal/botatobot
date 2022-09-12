@@ -7,7 +7,7 @@ import (
 	"os/signal"
 	"scristobal/botatobot/cfg"
 	"scristobal/botatobot/handlers"
-	"scristobal/botatobot/queue"
+	"scristobal/botatobot/worker"
 
 	"github.com/go-telegram/bot"
 )
@@ -36,7 +36,7 @@ func main() {
 
 	log.Println("Initializing job queue...")
 
-	queue.Init(ctx)
+	worker.Init(ctx)
 
 	go func() {
 		for {
@@ -44,8 +44,8 @@ func main() {
 			case <-ctx.Done():
 				return
 			default:
-				job := queue.Pop()
-				handlers.Job(ctx, b, &job)
+				job := worker.Pop()
+				handlers.Request(ctx, b, &job)
 			}
 		}
 	}()

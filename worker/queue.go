@@ -1,4 +1,4 @@
-package queue
+package worker
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 
 type Job interface {
 	Run()
+	Read() []byte
 }
 
 type CurrentJob struct {
@@ -18,8 +19,8 @@ type CurrentJob struct {
 }
 
 var (
-	pending chan Job
-	done    chan Job
+	pending chan Job // change to request
+	done    chan Job //change to results, method? .Get()?
 	current CurrentJob
 )
 
