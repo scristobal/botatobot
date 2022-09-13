@@ -108,9 +108,7 @@ func FromString(s string) ([]Txt2img, error) {
 
 	hasSeed := false
 
-	defaultJob := Txt2img{
-		Prompt:              "",
-		Seed:                rand.Intn(1000000),
+	params := Txt2img{
 		Num_inference_steps: 50,
 		Guidance_scale:      7.5,
 	}
@@ -134,7 +132,7 @@ func FromString(s string) ([]Txt2img, error) {
 				if err != nil {
 					return []Txt2img{}, fmt.Errorf("invalid seed, should be a number &seed_1234")
 				}
-				defaultJob.Seed = seed
+				params.Seed = seed
 				hasSeed = true
 			case "&steps":
 				steps, err := strconv.Atoi(value)
@@ -146,7 +144,7 @@ func FromString(s string) ([]Txt2img, error) {
 					return []Txt2img{}, fmt.Errorf("invalid number of inference steps, should be between 1 and 100 &steps_50")
 				}
 
-				defaultJob.Num_inference_steps = steps
+				params.Num_inference_steps = steps
 			case "&guidance":
 				guidance, err := strconv.ParseFloat(value, 32)
 				if err != nil {
@@ -157,7 +155,7 @@ func FromString(s string) ([]Txt2img, error) {
 					return []Txt2img{}, fmt.Errorf("invalid guidance scale, should be between 1 and 20 &guidance_7.5")
 
 				}
-				defaultJob.Guidance_scale = float32(guidance)
+				params.Guidance_scale = float32(guidance)
 
 			default:
 				return []Txt2img{}, fmt.Errorf("invalid parameter, format should be :param_value, allowed parameters are &seed_, &steps_, and &guidance_")
@@ -171,22 +169,26 @@ func FromString(s string) ([]Txt2img, error) {
 		return []Txt2img{}, fmt.Errorf("prompt too short, should be at least 10 characters")
 	}
 
-	defaultJob.Prompt = strings.TrimSpace(s)
+	params.Prompt = strings.TrimSpace(s)
 
 	if hasSeed {
-		return []Txt2img{defaultJob}, nil
+		return []Txt2img{params}, nil
 	}
 
-	var jobs []Txt2img
+	jobs := make([]Txt2img, 4)
 
-	for i := 0; i < 5; i++ {
+	for i := 0; i < len(jobs); i++ {
 
-		jobs = append(jobs, Txt2img{
-			Seed:                rand.Intn(1_000_00),
-			Prompt:              defaultJob.Prompt,
-			Num_inference_steps: defaultJob.Num_inference_steps,
-			Guidance_scale:      defaultJob.Guidance_scale,
-		})
+		seed := rand.Intn(1_000_00)
+
+		job := Txt2img{
+			Seed:                seed,
+			Prompt:              params.Prompt,
+			Num_inference_steps: params.Num_inference_steps,
+			Guidance_scale:      params.Guidance_scale,
+		}
+
+		jobs[i] = job
 
 	}
 
@@ -222,19 +224,25 @@ func (j *Txt2img) Run() {
 
 	json.Unmarshal(body, &response)
 
-	output := response.Output[0]
+	var output string
+	if len(response.Output) > 0 { // local response from replicate
+		output = response.Output[0]
 
-	// remove the data URL prefix
-	data := strings.SplitAfter(output, ",")[1]
+		// remove the data URL prefix
+		data := strings.SplitAfter(output, ",")[1]
 
-	decoded, err := base64.StdEncoding.DecodeString(data)
+		decoded, err := base64.StdEncoding.DecodeString(data)
 
-	if err != nil {
-		j.Error = fmt.Errorf("can't decode model response: %s", err)
+		if err != nil {
+			j.Error = fmt.Errorf("can't decode model response: %s", err)
+			return
+		}
+
+		j.Result = decoded
+	} else {
+		j.Error = fmt.Errorf("no output in model response")
 		return
 	}
-
-	j.Result = decoded
 }
 
 func (j Txt2img) Read() []byte {
