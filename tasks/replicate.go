@@ -36,9 +36,7 @@ func (j *ReplicateTxt2Img) Run() {
 
 	req.Header.Add("Content-Type", "application/json")
 
-	if cfg.TOKEN != "" {
-		req.Header.Add("Authorization", fmt.Sprintf("Token %s", cfg.TOKEN))
-	}
+	req.Header.Add("Authorization", fmt.Sprintf("Token %s", cfg.TOKEN))
 
 	res, err := client.Do(req)
 
@@ -85,9 +83,7 @@ func (j *ReplicateTxt2Img) Run() {
 		return
 	}
 
-	if cfg.TOKEN != "" {
-		req.Header.Add("Authorization", fmt.Sprintf("Token %s", cfg.TOKEN))
-	}
+	req.Header.Add("Authorization", fmt.Sprintf("Token %s", cfg.TOKEN))
 
 	time.Sleep(5 * time.Second)
 
@@ -134,9 +130,7 @@ func (j *ReplicateTxt2Img) Run() {
 		return
 	}
 
-	if cfg.TOKEN != "" {
-		req.Header.Add("Authorization", fmt.Sprintf("Token %s", cfg.TOKEN))
-	}
+	req.Header.Add("Authorization", fmt.Sprintf("Token %s", cfg.TOKEN))
 
 	res, err = client.Do(req)
 

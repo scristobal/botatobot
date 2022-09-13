@@ -19,6 +19,7 @@ const MAX_JOBS = 20
 
 func FromEnv() error {
 	err := godotenv.Load()
+
 	var ok bool
 
 	if err != nil {
@@ -40,10 +41,14 @@ func FromEnv() error {
 	OUTPUT_PATH, ok = os.LookupEnv("OUTPUT_PATH")
 
 	if !ok {
-		return fmt.Errorf("OUTPUT_PATH not found")
+		return fmt.Errorf("OUTPUT_PATH not found, files might not be saved locally")
 	}
 
-	TOKEN, _ = os.LookupEnv("TOKEN")
+	TOKEN, ok = os.LookupEnv("TOKEN")
+
+	if !ok {
+		log.Println("TOKEN not found, calls to external APIS might fail")
+	}
 
 	return nil
 
