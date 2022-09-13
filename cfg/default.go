@@ -9,10 +9,10 @@ import (
 )
 
 var (
-	BOT_TOKEN    string
-	BOT_USERNAME string
-	MODEL_URL    string
-	OUTPUT_PATH  string
+	BOT_TOKEN   string
+	MODEL_URL   string
+	OUTPUT_PATH string
+	TOKEN       string
 )
 
 const MAX_JOBS = 20
@@ -31,12 +31,6 @@ func FromEnv() error {
 		return fmt.Errorf("BOT_TOKEN not found")
 	}
 
-	BOT_USERNAME, ok = os.LookupEnv("BOT_USERNAME")
-
-	if !ok {
-		return fmt.Errorf("BOT_USERNAME not found")
-	}
-
 	MODEL_URL, ok = os.LookupEnv("MODEL_URL")
 
 	if !ok {
@@ -48,6 +42,8 @@ func FromEnv() error {
 	if !ok {
 		return fmt.Errorf("OUTPUT_PATH not found")
 	}
+
+	TOKEN, _ = os.LookupEnv("TOKEN")
 
 	return nil
 

@@ -8,7 +8,6 @@ Run Replicate's stable diffusion image locally with `docker run -d -p 5001:5000 
 
 ```text
 BOT_TOKEN=123456789:ABCDEF1234567890ABCDEF1234567890ABC
-BOT_USERNAME=@example_bot
 MODEL_URL=http://127.0.0.1:5001/predictions
 OUTPUT_PATH=/home/user/pictures
 ```
