@@ -2,10 +2,8 @@ package worker
 
 import (
 	"context"
-	"math/rand"
 	"scristobal/botatobot/cfg"
 	"sync"
-	"time"
 )
 
 type Job interface {
@@ -29,8 +27,6 @@ func Init(ctx context.Context) {
 	pending = make(chan Job, cfg.MAX_JOBS)
 
 	done = make(chan Job, cfg.MAX_JOBS)
-
-	rand.Seed(time.Now().UnixNano())
 
 	go func() {
 		for {

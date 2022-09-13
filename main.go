@@ -3,16 +3,21 @@ package main
 import (
 	"context"
 	"log"
+	"math/rand"
 	"os"
 	"os/signal"
 	"scristobal/botatobot/cfg"
 	"scristobal/botatobot/handlers"
 	"scristobal/botatobot/worker"
+	"time"
 
 	"github.com/go-telegram/bot"
 )
 
 func main() {
+
+	rand.Seed(time.Now().UnixNano())
+
 	log.Println("Loading configuration...")
 
 	err := cfg.FromEnv()
