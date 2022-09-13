@@ -10,8 +10,8 @@ import (
 
 type Request struct {
 	tasks.Txt2img
-	Id  uuid.UUID
-	Msg *models.Message
+	Id  uuid.UUID       `json:"id"`
+	Msg *models.Message `json:"message"`
 }
 
 func New(m models.Message) ([]Request, error) {
