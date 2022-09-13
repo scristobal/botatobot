@@ -91,6 +91,7 @@ func Update(ctx context.Context, b *bot.Bot, update *models.Update) {
 		log.Printf("User %s request accepted, job id %s", message.From.Username, id)
 
 		for _, req := range requests {
+			req := req
 			worker.Push(&req)
 		}
 	}
