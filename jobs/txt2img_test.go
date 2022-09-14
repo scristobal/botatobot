@@ -4,9 +4,7 @@ import (
 	"testing"
 )
 
-// TestClean calls clean and checks different cases
 func TestClean(t *testing.T) {
-
 	tests := []struct {
 		prompt   string
 		expected string
@@ -19,13 +17,12 @@ func TestClean(t *testing.T) {
 	for _, tt := range tests {
 		msg := clean(tt.prompt)
 		if msg != tt.expected {
-			t.Fatalf(`Hello("") = %q, want %q, error`, msg, tt.expected)
+			t.Fatalf(`Got = %q, want %q, error`, msg, tt.expected)
 		}
 	}
 }
 
 func TestRemoveMentions(t *testing.T) {
-
 	tests := []struct {
 		prompt   string
 		expected string
@@ -38,13 +35,12 @@ func TestRemoveMentions(t *testing.T) {
 	for _, tt := range tests {
 		msg := removeMentions(tt.prompt)
 		if msg != tt.expected {
-			t.Fatalf(`Hello("") = %q, want %q, error`, msg, tt.expected)
+			t.Fatalf(`Got = %q, want %q, error`, msg, tt.expected)
 		}
 	}
 }
 
 func TestRemoveCommands(t *testing.T) {
-
 	tests := []struct {
 		prompt   string
 		expected string
@@ -57,7 +53,7 @@ func TestRemoveCommands(t *testing.T) {
 	for _, tt := range tests {
 		msg := removeCommands(tt.prompt)
 		if msg != tt.expected {
-			t.Fatalf(`Hello("") = %q, want %q, error`, msg, tt.expected)
+			t.Fatalf(`Got = %q, want %q, error`, msg, tt.expected)
 		}
 	}
 }

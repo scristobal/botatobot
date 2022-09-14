@@ -65,7 +65,7 @@ func removeCommands(msg string) string {
 	words := strings.Split(msg, " ")
 
 	for _, w := range words {
-		if w[0] == byte('/') {
+		if len(w) > 0 && w[0] == byte('/') {
 			msg = strings.ReplaceAll(msg, w, "")
 		}
 	}
@@ -76,7 +76,7 @@ func removeMentions(msg string) string {
 	words := strings.Split(msg, " ")
 
 	for _, w := range words {
-		if w[0] == byte('@') {
+		if len(w) > 0 && w[0] == byte('@') {
 			msg = strings.ReplaceAll(msg, w, "")
 		}
 	}
