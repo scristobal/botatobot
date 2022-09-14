@@ -25,6 +25,7 @@ func New(m models.Message) ([]Request, error) {
 	var requests []Request
 
 	for _, job := range jobs {
+		job := job
 		requests = append(requests, Request{&job, uuid.New(), &m})
 	}
 
@@ -45,4 +46,8 @@ func (r Request) Run() {
 
 func (r Request) Result() ([]byte, error) {
 	return r.t.Result()
+}
+
+func (r Request) String() string {
+	return r.t.String()
 }
