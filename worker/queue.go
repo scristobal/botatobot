@@ -6,27 +6,29 @@ import (
 	"sync"
 )
 
-type Job interface {
+type job interface {
 	Run()
-	Read() []byte
 }
 
-type CurrentJob struct {
-	job *Job
-	mut sync.RWMutex
+type Queue[T job] struct {
+	current *struct {
+		job *T
+		mut sync.RWMutex
+	}
+	pending chan T
+	done    chan T
 }
 
-var (
-	pending chan Job
-	done    chan Job
-	current CurrentJob
-)
+func Init[T job](ctx context.Context) Queue[T] {
 
-func Init(ctx context.Context) {
+	pending := make(chan T, cfg.MAX_JOBS)
 
-	pending = make(chan Job, cfg.MAX_JOBS)
+	done := make(chan T, cfg.MAX_JOBS)
 
-	done = make(chan Job, cfg.MAX_JOBS)
+	current := &struct {
+		job *T
+		mut sync.RWMutex
+	}{}
 
 	go func() {
 		for {
@@ -35,44 +37,41 @@ func Init(ctx context.Context) {
 				return
 			case job := <-pending:
 				{
-					process(job)
+					current.mut.Lock()
+					current.job = &job
+					current.mut.Unlock()
+
+					defer func() {
+						current.mut.Lock()
+						current.job = nil
+						current.mut.Unlock()
+					}()
+
+					job.Run()
 					done <- job
 				}
 			}
 		}
 	}()
 
+	return Queue[T]{current, pending, done}
+
 }
 
-func process(job Job) {
-
-	current.mut.Lock()
-	current.job = &job
-	current.mut.Unlock()
-
-	defer func() {
-		current.mut.Lock()
-		current.job = nil
-		current.mut.Unlock()
-	}()
-
-	job.Run()
+func (q *Queue[T]) Push(job T) {
+	q.pending <- job
 }
 
-func Push(job Job) {
-	pending <- job
+func (q *Queue[T]) Pop() T {
+	return <-q.done
 }
 
-func Pop() Job {
-	return <-done
+func (q *Queue[T]) Len() int {
+	return len(q.pending)
 }
 
-func Len() int {
-	return len(pending)
-}
-
-func Current() *Job {
-	current.mut.RLock()
-	defer current.mut.RUnlock()
-	return current.job
+func (q *Queue[T]) Current() *T {
+	q.current.mut.RLock()
+	defer q.current.mut.RUnlock()
+	return q.current.job
 }

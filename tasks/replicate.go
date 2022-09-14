@@ -153,6 +153,6 @@ func (j *ReplicateTxt2Img) Run() {
 		return
 	}
 
-	j.Result = body
+	j.Output = body
 
 }

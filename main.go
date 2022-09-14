@@ -31,17 +31,19 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
+	log.Println("Initializing work queue...")
+
+	queue := worker.Init[worker.Request](ctx)
+
 	log.Println("Creating bot...")
 
+	handlerUpdate := handlers.NewHandle(queue)
+
 	opts := []bot.Option{
-		bot.WithDefaultHandler(handlers.Update),
+		bot.WithDefaultHandler(handlerUpdate),
 	}
 
 	b := bot.New(cfg.BOT_TOKEN, opts...)
-
-	log.Println("Initializing work queue...")
-
-	worker.Init(ctx)
 
 	go func() {
 		for {
@@ -49,7 +51,7 @@ func main() {
 			case <-ctx.Done():
 				return
 			default:
-				req := worker.Pop().(*worker.Request)
+				req := queue.Pop()
 				handlers.Request(ctx, b, req)
 			}
 		}

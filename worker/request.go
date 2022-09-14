@@ -9,9 +9,9 @@ import (
 )
 
 type Request struct {
-	tasks.Txt2img
-	Id  uuid.UUID       `json:"id"`
-	Msg *models.Message `json:"message"`
+	t   *tasks.Txt2img
+	id  uuid.UUID       //`json:"id"`
+	msg *models.Message //`json:"message"`
 }
 
 func New(m models.Message) ([]Request, error) {
@@ -25,8 +25,24 @@ func New(m models.Message) ([]Request, error) {
 	var requests []Request
 
 	for _, job := range jobs {
-		requests = append(requests, Request{job, uuid.New(), &m})
+		requests = append(requests, Request{&job, uuid.New(), &m})
 	}
 
 	return requests, nil
+}
+
+func (r Request) Id() uuid.UUID {
+	return r.id
+}
+
+func (r Request) Msg() *models.Message {
+	return r.msg
+}
+
+func (r Request) Run() {
+	r.t.Run()
+}
+
+func (r Request) Result() ([]byte, error) {
+	return r.t.Result()
 }

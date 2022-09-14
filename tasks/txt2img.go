@@ -20,7 +20,7 @@ type Txt2img struct {
 	Seed                int     `json:"seed,omitempty"`
 	Num_inference_steps int     `json:"num_inference_steps,omitempty"`
 	Guidance_scale      float32 `json:"guidance_scale,omitempty"`
-	Result              []byte  `json:"-"` // not serialized
+	Output              []byte  `json:"-"` // not serialized
 	Error               error   `json:"error,omitempty"`
 }
 
@@ -86,15 +86,6 @@ func clean(m string) string {
 	m = reg.ReplaceAllString(m, " ")
 
 	return m
-}
-
-func (j Txt2img) String() string {
-
-	res := fmt.Sprintf("%s &seed_%d &steps_%d &guidance_%1.f", j.Prompt, j.Seed, j.Num_inference_steps, j.Guidance_scale)
-
-	res = strings.TrimSpace(res)
-
-	return res
 }
 
 func FromString(s string) ([]Txt2img, error) {
@@ -238,13 +229,22 @@ func (j *Txt2img) Run() {
 			return
 		}
 
-		j.Result = decoded
+		j.Output = decoded
 	} else {
 		j.Error = fmt.Errorf("no output in model response")
 		return
 	}
 }
 
-func (j Txt2img) Read() []byte {
-	return j.Result
+func (j Txt2img) Result() ([]byte, error) {
+	return j.Output, j.Error
+}
+
+func (j Txt2img) String() string {
+
+	res := fmt.Sprintf("%s &seed_%d &steps_%d &guidance_%1.f", j.Prompt, j.Seed, j.Num_inference_steps, j.Guidance_scale)
+
+	res = strings.TrimSpace(res)
+
+	return res
 }
