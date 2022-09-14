@@ -1,14 +1,9 @@
 package tasks
 
 import (
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
-	"io"
 	"math/rand"
-	"net/http"
 	"regexp"
-	"scristobal/botatobot/cfg"
 	"strconv"
 	"strings"
 
@@ -22,6 +17,7 @@ type Txt2img struct {
 	Guidance_scale      float32 `json:"guidance_scale,omitempty"`
 	Output              []byte  `json:"-"` // not serialized
 	Error               error   `json:"error,omitempty"`
+	Runner              string
 }
 
 type apiResponse struct {
@@ -102,6 +98,7 @@ func FromString(s string) ([]Txt2img, error) {
 	params := Txt2img{
 		Num_inference_steps: 50,
 		Guidance_scale:      7.5,
+		Runner:              "remote",
 	}
 
 	words := strings.Split(s, " ")
@@ -188,51 +185,10 @@ func FromString(s string) ([]Txt2img, error) {
 
 func (j *Txt2img) Run() {
 
-	input, err := json.Marshal(j)
-
-	if err != nil {
-		j.Error = fmt.Errorf("fail to serialize job parameters: %v", err)
-		return
-	}
-
-	res, err := http.Post(cfg.MODEL_URL, "application/json", strings.NewReader(fmt.Sprintf(`{"input": %s}`, input)))
-
-	if err != nil {
-		j.Error = fmt.Errorf("failed to run the model: %s", err)
-		return
-	}
-
-	defer res.Body.Close()
-
-	body, err := io.ReadAll(res.Body)
-
-	if err != nil {
-		j.Error = fmt.Errorf("can't read model response: %s", err)
-		return
-	}
-
-	response := apiResponse{}
-
-	json.Unmarshal(body, &response)
-
-	var output string
-	if len(response.Output) > 0 { // local response from replicate
-		output = response.Output[0]
-
-		// remove the data URL prefix
-		data := strings.SplitAfter(output, ",")[1]
-
-		decoded, err := base64.StdEncoding.DecodeString(data)
-
-		if err != nil {
-			j.Error = fmt.Errorf("can't decode model response: %s", err)
-			return
-		}
-
-		j.Output = decoded
+	if j.Runner == "remote" {
+		j.Output, j.Error = remoteRunner(j)
 	} else {
-		j.Error = fmt.Errorf("no output in model response")
-		return
+		j.Output, j.Error = localRunner(j)
 	}
 }
 

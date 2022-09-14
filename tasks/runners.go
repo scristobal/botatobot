@@ -1,6 +1,7 @@
 package tasks
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,15 +11,60 @@ import (
 	"time"
 )
 
-type ReplicateTxt2Img struct{ Txt2img }
+func localRunner(j *Txt2img) ([]byte, error) {
+	input, err := json.Marshal(j)
 
-func (j *ReplicateTxt2Img) Run() {
+	if err != nil {
+		return []byte{}, fmt.Errorf("fail to serialize job parameters: %v", err)
+	}
+
+	res, err := http.Post(cfg.MODEL_URL, "application/json", strings.NewReader(fmt.Sprintf(`{"input": %s}`, input)))
+
+	if err != nil {
+		return []byte{}, fmt.Errorf("failed to run the model: %s", err)
+
+	}
+
+	defer res.Body.Close()
+
+	body, err := io.ReadAll(res.Body)
+
+	if err != nil {
+		return []byte{}, fmt.Errorf("can't read model response: %s", err)
+
+	}
+
+	response := apiResponse{}
+
+	json.Unmarshal(body, &response)
+
+	var output string
+	if len(response.Output) > 0 { // local response from replicate
+		output = response.Output[0]
+
+		// remove the data URL prefix
+		data := strings.SplitAfter(output, ",")[1]
+
+		decoded, err := base64.StdEncoding.DecodeString(data)
+
+		if err != nil {
+			return []byte{}, fmt.Errorf("can't decode model response: %s", err)
+
+		}
+
+		return decoded, nil
+	} else {
+		return []byte{}, fmt.Errorf("no output in model response")
+	}
+
+}
+
+func remoteRunner(j *Txt2img) ([]byte, error) {
 
 	input, err := json.Marshal(j)
 
 	if err != nil {
-		j.Error = fmt.Errorf("fail to serialize job parameters: %v", err)
-		return
+		return []byte{}, fmt.Errorf("fail to serialize job parameters: %v", err)
 	}
 
 	client := &http.Client{}
@@ -30,8 +76,7 @@ func (j *ReplicateTxt2Img) Run() {
 	req, err := http.NewRequest("POST", cfg.MODEL_URL, reqBody)
 
 	if err != nil {
-		j.Error = fmt.Errorf("fail to create request: %v", err)
-		return
+		return []byte{}, fmt.Errorf("fail to create request: %v", err)
 	}
 
 	req.Header.Add("Content-Type", "application/json")
@@ -41,8 +86,7 @@ func (j *ReplicateTxt2Img) Run() {
 	res, err := client.Do(req)
 
 	if err != nil {
-		j.Error = fmt.Errorf("failed to run the model: %s", err)
-		return
+		return []byte{}, fmt.Errorf("failed to run the model: %s", err)
 	}
 
 	defer res.Body.Close()
@@ -55,8 +99,7 @@ func (j *ReplicateTxt2Img) Run() {
 	fmt.Println("body", string(body))
 
 	if err != nil {
-		j.Error = fmt.Errorf("can't read model response: %s", err)
-		return
+		return []byte{}, fmt.Errorf("can't read model response: %s", err)
 	}
 
 	type apiResponse struct {
@@ -70,8 +113,7 @@ func (j *ReplicateTxt2Img) Run() {
 	json.Unmarshal(body, &response)
 
 	if response.Urls.Get == "" {
-		j.Error = fmt.Errorf("can't decode model response: %s", err)
-		return
+		return []byte{}, fmt.Errorf("can't decode model response: %s", err)
 	}
 
 	// 2nd request to get job result
@@ -79,8 +121,7 @@ func (j *ReplicateTxt2Img) Run() {
 	req, err = http.NewRequest("GET", response.Urls.Get, nil)
 
 	if err != nil {
-		j.Error = fmt.Errorf("fail to create request: %v", err)
-		return
+		return []byte{}, fmt.Errorf("fail to create request: %v", err)
 	}
 
 	req.Header.Add("Authorization", fmt.Sprintf("Token %s", cfg.TOKEN))
@@ -90,8 +131,7 @@ func (j *ReplicateTxt2Img) Run() {
 	res, err = client.Do(req)
 
 	if err != nil {
-		j.Error = fmt.Errorf("failed to run the model: %s", err)
-		return
+		return []byte{}, fmt.Errorf("failed to run the model: %s", err)
 	}
 
 	defer res.Body.Close()
@@ -104,8 +144,7 @@ func (j *ReplicateTxt2Img) Run() {
 	fmt.Println("body", string(body))
 
 	if err != nil {
-		j.Error = fmt.Errorf("can't read model response: %s", err)
-		return
+		return []byte{}, fmt.Errorf("can't read model response: %s", err)
 	}
 
 	type getResponse struct {
@@ -117,8 +156,7 @@ func (j *ReplicateTxt2Img) Run() {
 	json.Unmarshal(body, &resp)
 
 	if len(resp.Output) == 0 {
-		j.Error = fmt.Errorf("can't decode model response: %s", err)
-		return
+		return []byte{}, fmt.Errorf("can't decode model response: %s", err)
 	}
 
 	// 3rd request to get image
@@ -126,8 +164,7 @@ func (j *ReplicateTxt2Img) Run() {
 	req, err = http.NewRequest("GET", resp.Output[0], nil)
 
 	if err != nil {
-		j.Error = fmt.Errorf("fail to create request: %v", err)
-		return
+		return []byte{}, fmt.Errorf("fail to create request: %v", err)
 	}
 
 	req.Header.Add("Authorization", fmt.Sprintf("Token %s", cfg.TOKEN))
@@ -135,8 +172,7 @@ func (j *ReplicateTxt2Img) Run() {
 	res, err = client.Do(req)
 
 	if err != nil {
-		j.Error = fmt.Errorf("failed to run the model: %s", err)
-		return
+		return []byte{}, fmt.Errorf("failed to run the model: %s", err)
 	}
 
 	defer res.Body.Close()
@@ -149,10 +185,8 @@ func (j *ReplicateTxt2Img) Run() {
 	//fmt.Println("body", string(body))
 
 	if err != nil {
-		j.Error = fmt.Errorf("can't read model response: %s", err)
-		return
+		return []byte{}, fmt.Errorf("can't read model response: %s", err)
 	}
 
-	j.Output = body
-
+	return body, nil
 }
