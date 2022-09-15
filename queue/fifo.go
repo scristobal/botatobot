@@ -1,4 +1,4 @@
-package worker
+package queue
 
 import (
 	"context"
@@ -19,7 +19,7 @@ type Queue[T job] struct {
 	done    chan T
 }
 
-func Init[T job](ctx context.Context) Queue[T] {
+func New[T job](ctx context.Context) Queue[T] {
 
 	pending := make(chan T, config.MAX_JOBS)
 

@@ -6,21 +6,20 @@ import (
 	"os"
 	"path/filepath"
 	"scristobal/botatobot/config"
-	"scristobal/botatobot/tasks"
 
 	"github.com/go-telegram/bot/models"
 	"github.com/google/uuid"
 )
 
 type Request struct {
-	t   *tasks.Txt2img
+	t   *Txt2img
 	id  uuid.UUID       //`json:"id"`
 	msg *models.Message //`json:"message"`
 }
 
 func New(m models.Message) ([]Request, error) {
 
-	jobs, err := tasks.FromString(m.Text)
+	jobs, err := FromString(m.Text)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %s", err)
@@ -61,7 +60,7 @@ func (r *Request) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
 		Id   uuid.UUID       `json:"id"`
 		Msg  *models.Message `json:"message"`
-		Task tasks.Txt2img   `json:"task"`
+		Task Txt2img         `json:"task"`
 	}{
 		r.id,
 		r.msg,

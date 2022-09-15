@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"scristobal/botatobot/config"
 	"scristobal/botatobot/handlers"
+	"scristobal/botatobot/queue"
 	"scristobal/botatobot/worker"
 	"time"
 
@@ -33,7 +34,7 @@ func main() {
 
 	log.Println("Initializing work queue...")
 
-	queue := worker.Init[worker.Request](ctx)
+	queue := queue.New[worker.Request](ctx)
 
 	log.Println("Creating bot...")
 

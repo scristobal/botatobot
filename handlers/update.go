@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"scristobal/botatobot/config"
+	"scristobal/botatobot/queue"
 	"scristobal/botatobot/worker"
 
 	"strings"
@@ -42,7 +43,7 @@ func (c Command) String() string {
 	return "Unknown command"
 }
 
-func NewHandle(q worker.Queue[worker.Request]) func(context.Context, *bot.Bot, *models.Update) {
+func NewHandle(q queue.Queue[worker.Request]) func(context.Context, *bot.Bot, *models.Update) {
 	return func(ctx context.Context, b *bot.Bot, update *models.Update) {
 
 		defer func() {

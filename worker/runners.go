@@ -1,4 +1,4 @@
-package tasks
+package worker
 
 import (
 	"encoding/base64"
