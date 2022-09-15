@@ -21,7 +21,9 @@ type Queue[T job, M any] struct {
 	done    chan T
 }
 
-func New[T job, M any](ctx context.Context, generator func(M) ([]T, error)) Queue[T, M] {
+type Generator[T job, M any] func(M) ([]T, error)
+
+func New[T job, M any](ctx context.Context, generator Generator[T, M]) Queue[T, M] {
 
 	pending := make(chan T, config.MAX_JOBS)
 
@@ -86,8 +88,8 @@ func (q Queue[T, M]) Len() int {
 	return len(q.pending)
 }
 
-func (q Queue[T, M]) Current() *T {
+func (q Queue[T, M]) IsWorking() bool {
 	q.current.mut.RLock()
 	defer q.current.mut.RUnlock()
-	return q.current.job
+	return q.current.job != nil
 }

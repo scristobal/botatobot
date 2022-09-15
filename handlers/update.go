@@ -1,15 +1,8 @@
 package handlers
 
 import (
-	"bytes"
 	"context"
-	"encoding/base64"
-	"encoding/json"
-	"fmt"
-	"io"
 	"log"
-	"net/http"
-	"os"
 	"scristobal/botatobot/handlers/controllers"
 
 	"strings"
@@ -40,18 +33,15 @@ func (c Command) String() string {
 	return "Unknown command"
 }
 
-type request interface {
-	Run()
-	//Result() ([]byte, error)
-}
-
-type Queue[T request, M any] interface {
-	Push(item M) error
+type queue interface {
+	Push(item models.Message) error
 	Len() int
-	Current() *T
+	IsWorking() bool
 }
 
-func NewHandler[T request](q Queue[T, models.Message]) func(context.Context, *bot.Bot, *models.Update) {
+type Handler = func(context.Context, *bot.Bot, *models.Update)
+
+func NewHandler[T any](q queue) Handler {
 
 	return func(ctx context.Context, b *bot.Bot, update *models.Update) {
 
@@ -71,9 +61,7 @@ func NewHandler[T request](q Queue[T, models.Message]) func(context.Context, *bo
 		m := update.Message.Text
 
 		if strings.HasPrefix(m, string(Generate)) {
-
 			controllers.Generate[T](ctx, b, *message, q)
-
 		}
 
 		if strings.HasPrefix(m, string(Help)) {
@@ -81,87 +69,87 @@ func NewHandler[T request](q Queue[T, models.Message]) func(context.Context, *bo
 		}
 
 		if strings.HasPrefix(m, string(Status)) {
-			controllers.Status[T](ctx, b, *message, q)
+			controllers.Status(ctx, b, *message, q)
 		}
+		/*
+			if strings.HasPrefix(m, "/video-test") {
 
-		if strings.HasPrefix(m, "/video-test") {
+				prompt := strings.ReplaceAll(m, "/video-test", "")
 
-			prompt := strings.ReplaceAll(m, "/video-test", "")
+				host := "http://127.0.0.1:5000/predictions"
 
-			host := "http://127.0.0.1:5000/predictions"
+				res, err := http.Post(host, "application/json", strings.NewReader(fmt.Sprintf(
+					`{"input": {
+					"max_frames": 300,
+					"animation_prompts": "0: %s",
+					"angle": "0:(0)",
+					"zoom": "0: (1)",
+					"translation_x": "0: (0)",
+					"translation_y": "0: (0)",
+					"color_coherence": "Match Frame 0 LAB",
+					"sampler": "plms",
+					"fps": 10,
+					"seed": 242351
+				}}`,
+					prompt,
+				)))
 
-			res, err := http.Post(host, "application/json", strings.NewReader(fmt.Sprintf(
-				`{"input": {
-				"max_frames": 300,
-				"animation_prompts": "0: %s",
-				"angle": "0:(0)",
-				"zoom": "0: (1)",
-				"translation_x": "0: (0)",
-				"translation_y": "0: (0)",
-				"color_coherence": "Match Frame 0 LAB",
-				"sampler": "plms",
-				"fps": 10,
-				"seed": 242351
-			}}`,
-				prompt,
-			)))
+				if err != nil {
+					log.Println(err)
+					return
+				}
 
-			if err != nil {
-				log.Println(err)
-				return
+				defer res.Body.Close()
+
+				body, err := io.ReadAll(res.Body)
+
+				if err != nil {
+					log.Println(err)
+					return
+				}
+
+				type modelResponse struct {
+					Status string `json:"status"`
+					Output string `json:"output"`
+				}
+
+				response := modelResponse{}
+
+				err = json.Unmarshal(body, &response)
+
+				if err != nil {
+					log.Println(err)
+					return
+				}
+
+				data := strings.SplitAfter(response.Output, ",")[1]
+
+				decoded, err := base64.StdEncoding.DecodeString(data)
+
+				if err != nil {
+					log.Println("Error decoding base64: ", err)
+
+					return
+				}
+
+				fileName := fmt.Sprintf("%s.mp4", strings.ReplaceAll(prompt, " ", "_"))
+
+				os.WriteFile(fileName, decoded, 0644)
+
+				msg, err := b.SendVideo(
+					ctx,
+					&bot.SendVideoParams{
+						ChatID:  message.Chat.ID,
+						Caption: "Test video",
+						Video:   &models.InputFileUpload{Filename: "sample.mp4", Data: bytes.NewReader(decoded)},
+					})
+
+				if err != nil {
+					log.Println("Error sending video: ", err, msg)
+					return
+				}
+
 			}
-
-			defer res.Body.Close()
-
-			body, err := io.ReadAll(res.Body)
-
-			if err != nil {
-				log.Println(err)
-				return
-			}
-
-			type modelResponse struct {
-				Status string `json:"status"`
-				Output string `json:"output"`
-			}
-
-			response := modelResponse{}
-
-			err = json.Unmarshal(body, &response)
-
-			if err != nil {
-				log.Println(err)
-				return
-			}
-
-			data := strings.SplitAfter(response.Output, ",")[1]
-
-			decoded, err := base64.StdEncoding.DecodeString(data)
-
-			if err != nil {
-				log.Println("Error decoding base64: ", err)
-
-				return
-			}
-
-			fileName := fmt.Sprintf("%s.mp4", strings.ReplaceAll(prompt, " ", "_"))
-
-			os.WriteFile(fileName, decoded, 0644)
-
-			msg, err := b.SendVideo(
-				ctx,
-				&bot.SendVideoParams{
-					ChatID:  message.Chat.ID,
-					Caption: "Test video",
-					Video:   &models.InputFileUpload{Filename: "sample.mp4", Data: bytes.NewReader(decoded)},
-				})
-
-			if err != nil {
-				log.Println("Error sending video: ", err, msg)
-				return
-			}
-
-		}
-
+		*/
 	}
 }

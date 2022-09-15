@@ -8,23 +8,17 @@ import (
 	"github.com/go-telegram/bot/models"
 )
 
-type request interface {
-	Run()
-	//Result() ([]byte, error)
-}
-
-type Queue[T request, M any] interface {
-	Push(item M) error
+type statusQueue interface {
 	Len() int
-	Current() *T
+	IsWorking() bool
 }
 
-func Status[T request](ctx context.Context, b *bot.Bot, message models.Message, q Queue[T, models.Message]) {
-	job := q.Current()
+func Status(ctx context.Context, b *bot.Bot, message models.Message, q statusQueue) {
+	isWorking := q.IsWorking()
 
 	numJobs := q.Len()
 
-	if job == nil && numJobs == 0 {
+	if !isWorking && numJobs == 0 {
 		b.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID: message.Chat.ID,
 			Text:   "I am doing nothing and there are no jobs in the queue 🤖",
@@ -32,7 +26,7 @@ func Status[T request](ctx context.Context, b *bot.Bot, message models.Message, 
 		return
 	}
 
-	if job != nil {
+	if isWorking {
 
 		b.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID: message.Chat.ID,
