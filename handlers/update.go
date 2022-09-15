@@ -10,7 +10,7 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"scristobal/botatobot/cfg"
+	"scristobal/botatobot/config"
 	"scristobal/botatobot/worker"
 
 	"strings"
@@ -78,7 +78,7 @@ func NewHandle(q worker.Queue[worker.Request]) func(context.Context, *bot.Bot, *
 
 			log.Printf("User %s requested %s accepted\n", message.From.Username, id)
 
-			if q.Len() >= cfg.MAX_JOBS {
+			if q.Len() >= config.MAX_JOBS {
 				b.SendMessage(ctx,
 					&bot.SendMessageParams{
 						ChatID:           message.Chat.ID,

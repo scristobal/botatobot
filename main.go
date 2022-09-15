@@ -6,7 +6,7 @@ import (
 	"math/rand"
 	"os"
 	"os/signal"
-	"scristobal/botatobot/cfg"
+	"scristobal/botatobot/config"
 	"scristobal/botatobot/handlers"
 	"scristobal/botatobot/worker"
 	"time"
@@ -20,7 +20,7 @@ func main() {
 
 	log.Println("Loading configuration...")
 
-	err := cfg.FromEnv()
+	err := config.FromEnv()
 
 	if err != nil {
 		log.Fatalf("Error loading configuration: %v", err)
@@ -43,7 +43,7 @@ func main() {
 		bot.WithDefaultHandler(handlerUpdate),
 	}
 
-	b := bot.New(cfg.BOT_TOKEN, opts...)
+	b := bot.New(config.BOT_TOKEN, opts...)
 
 	go func() {
 		for {

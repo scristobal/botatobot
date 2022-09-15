@@ -2,7 +2,7 @@ package worker
 
 import (
 	"context"
-	"scristobal/botatobot/cfg"
+	"scristobal/botatobot/config"
 	"sync"
 )
 
@@ -21,9 +21,9 @@ type Queue[T job] struct {
 
 func Init[T job](ctx context.Context) Queue[T] {
 
-	pending := make(chan T, cfg.MAX_JOBS)
+	pending := make(chan T, config.MAX_JOBS)
 
-	done := make(chan T, cfg.MAX_JOBS)
+	done := make(chan T, config.MAX_JOBS)
 
 	current := &struct {
 		job *T

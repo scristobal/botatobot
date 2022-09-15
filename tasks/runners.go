@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"scristobal/botatobot/cfg"
+	"scristobal/botatobot/config"
 	"strings"
 	"time"
 )
@@ -18,7 +18,7 @@ func localRunner(j *Txt2img) ([]byte, error) {
 		return []byte{}, fmt.Errorf("fail to serialize job parameters: %v", err)
 	}
 
-	res, err := http.Post(cfg.MODEL_URL, "application/json", strings.NewReader(fmt.Sprintf(`{"input": %s}`, input)))
+	res, err := http.Post(config.MODEL_URL, "application/json", strings.NewReader(fmt.Sprintf(`{"input": %s}`, input)))
 
 	if err != nil {
 		return []byte{}, fmt.Errorf("failed to run the model: %s", err)
@@ -73,7 +73,7 @@ func remoteRunner(j *Txt2img) ([]byte, error) {
 
 	reqBody := strings.NewReader(fmt.Sprintf(`{"version": "a9758cbfbd5f3c2094457d996681af52552901775aa2d6dd0b17fd15df959bef", "input": %s}`, input))
 
-	req, err := http.NewRequest("POST", cfg.MODEL_URL, reqBody)
+	req, err := http.NewRequest("POST", config.MODEL_URL, reqBody)
 
 	if err != nil {
 		return []byte{}, fmt.Errorf("fail to create request: %v", err)
@@ -81,7 +81,7 @@ func remoteRunner(j *Txt2img) ([]byte, error) {
 
 	req.Header.Add("Content-Type", "application/json")
 
-	req.Header.Add("Authorization", fmt.Sprintf("Token %s", cfg.TOKEN))
+	req.Header.Add("Authorization", fmt.Sprintf("Token %s", config.TOKEN))
 
 	res, err := client.Do(req)
 
@@ -124,7 +124,7 @@ func remoteRunner(j *Txt2img) ([]byte, error) {
 		return []byte{}, fmt.Errorf("fail to create request: %v", err)
 	}
 
-	req.Header.Add("Authorization", fmt.Sprintf("Token %s", cfg.TOKEN))
+	req.Header.Add("Authorization", fmt.Sprintf("Token %s", config.TOKEN))
 
 	time.Sleep(5 * time.Second)
 
@@ -172,7 +172,7 @@ func remoteRunner(j *Txt2img) ([]byte, error) {
 		return []byte{}, fmt.Errorf("fail to create request: %v", err)
 	}
 
-	req.Header.Add("Authorization", fmt.Sprintf("Token %s", cfg.TOKEN))
+	req.Header.Add("Authorization", fmt.Sprintf("Token %s", config.TOKEN))
 
 	res, err = client.Do(req)
 
