@@ -104,7 +104,7 @@ func FromString(s string) ([]Txt2img, error) {
 	words := strings.Split(s, " ")
 
 	for _, word := range words {
-		if word[0] == byte('&') {
+		if len(word) > 0 && word[0] == byte('&') {
 			split := strings.Split(word, "_")
 
 			if len(split) < 2 {
