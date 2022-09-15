@@ -12,6 +12,8 @@ MODEL_URL=http://127.0.0.1:5001/predictions
 OUTPUT_PATH=/home/user/pictures
 ```
 
+If you want to run the model on replicate.com you also need to provide your token as `TOKEN`
+
 ## Usage
 
 To generate images, let the bot know by telling its name followed by a prompt, eg. `@example_bot a potato in a basket`.
