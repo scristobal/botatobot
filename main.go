@@ -52,7 +52,23 @@ func main() {
 				return
 			default:
 				req := queue.Pop()
-				handlers.Request(ctx, b, req)
+
+				_, err := req.Result()
+
+				if err != nil {
+					log.Printf("Error processing request %s: %v", req.Id(), err)
+				}
+
+				err = handlers.Request(ctx, b, req)
+
+				if err != nil {
+					log.Printf("Error notifying user of %s: %v", req.Id(), err)
+				}
+
+				err = req.SaveToDisk()
+				if err != nil {
+					log.Printf("Error saving request %s to disk: %v", req.Id(), err)
+				}
 			}
 		}
 	}()

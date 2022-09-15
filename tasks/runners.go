@@ -149,14 +149,19 @@ func remoteRunner(j *Txt2img) ([]byte, error) {
 
 	type getResponse struct {
 		Output []string `json:"output"`
+		Error  string   `json:"error"`
 	}
 
 	var resp getResponse
 
 	json.Unmarshal(body, &resp)
 
+	if resp.Error != "" {
+		return []byte{}, fmt.Errorf("problem running the model: %s", resp.Error)
+	}
+
 	if len(resp.Output) == 0 {
-		return []byte{}, fmt.Errorf("can't decode model response: %s", err)
+		return []byte{}, fmt.Errorf("empty model response")
 	}
 
 	// 3rd request to get image

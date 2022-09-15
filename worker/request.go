@@ -1,7 +1,11 @@
 package worker
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
+	"scristobal/botatobot/cfg"
 	"scristobal/botatobot/tasks"
 
 	"github.com/go-telegram/bot/models"
@@ -50,4 +54,55 @@ func (r Request) Result() ([]byte, error) {
 
 func (r Request) String() string {
 	return r.t.String()
+}
+
+func (r *Request) MarshalJSON() ([]byte, error) {
+	fmt.Println("marshalling request")
+	return json.Marshal(struct {
+		Id   uuid.UUID       `json:"id"`
+		Msg  *models.Message `json:"message"`
+		Task tasks.Txt2img   `json:"task"`
+	}{
+		r.id,
+		r.msg,
+		*r.t,
+	})
+}
+
+func (r *Request) SaveToDisk() error {
+
+	err := os.MkdirAll(cfg.OUTPUT_PATH, 0755)
+
+	if err != nil {
+		return fmt.Errorf("failed to create output directory: %s", err)
+	}
+
+	img, err := r.Result()
+
+	if err != nil {
+		return fmt.Errorf("failed to get result: %s", err)
+	}
+
+	imgFilePath := filepath.Join(cfg.OUTPUT_PATH, fmt.Sprintf("%s.png", r.Id()))
+
+	err = os.WriteFile(imgFilePath, img, 0644)
+
+	if err != nil {
+		return fmt.Errorf("can't write image to disc: %s", err)
+	}
+
+	content, err := json.Marshal(r)
+
+	if err != nil {
+		return fmt.Errorf("failed to serialize job parameters: %s", err)
+	}
+
+	jsonFilePath := filepath.Join(cfg.OUTPUT_PATH, fmt.Sprintf("%s.json", r.Id()))
+
+	err = os.WriteFile(jsonFilePath, content, 0644)
+
+	if err != nil {
+		return fmt.Errorf("error writing metadata: %s", err)
+	}
+	return nil
 }
