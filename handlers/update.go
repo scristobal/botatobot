@@ -11,8 +11,9 @@ import (
 	"net/http"
 	"os"
 	"scristobal/botatobot/config"
+	"scristobal/botatobot/handlers/controllers"
 	"scristobal/botatobot/queue"
-	"scristobal/botatobot/worker"
+	"scristobal/botatobot/requests"
 
 	"strings"
 
@@ -43,7 +44,16 @@ func (c Command) String() string {
 	return "Unknown command"
 }
 
-func NewHandle(q queue.Queue[worker.Request]) func(context.Context, *bot.Bot, *models.Update) {
+type job interface {
+	Run()
+	Describe() string
+	Result() ([]byte, error)
+}
+
+type Factory[T job] func(models.Message) ([]requests.Request[T], error)
+
+func NewHandle[T job](q queue.Queue[requests.Request[T]], factory Factory[T]) func(context.Context, *bot.Bot, *models.Update) {
+
 	return func(ctx context.Context, b *bot.Bot, update *models.Update) {
 
 		defer func() {
@@ -65,7 +75,7 @@ func NewHandle(q queue.Queue[worker.Request]) func(context.Context, *bot.Bot, *m
 
 		if strings.HasPrefix(m, string(Generate)) {
 
-			requests, err := worker.New(*message)
+			requests, err := factory(*message)
 
 			if err != nil {
 				b.SendMessage(ctx, &bot.SendMessageParams{
@@ -100,15 +110,10 @@ func NewHandle(q queue.Queue[worker.Request]) func(context.Context, *bot.Bot, *m
 		}
 
 		if strings.HasPrefix(m, string(Help)) {
-
-			b.SendMessage(ctx, &bot.SendMessageParams{
-				ChatID: message.Chat.ID,
-				Text:   "Hi! I'm a 🤖 that generates images from text. Use the /generate command follow by a prompt, like this: \n\n   /generate a cat in space \n\nBy default I will generate 5 images, but you can modify the seed, guidance and steps like so\n\n /generate a cat in space &seed_1234 &steps_50 &guidance_7.5\n\nCheck my status with /status\n\nHave fun!",
-			})
+			controllers.Help(ctx, b, message)
 		}
 
 		if strings.HasPrefix(m, string(Status)) {
-
 			job := q.Current()
 
 			numJobs := q.Len()
@@ -137,6 +142,7 @@ func NewHandle(q queue.Queue[worker.Request]) func(context.Context, *bot.Bot, *m
 				})
 				return
 			}
+
 		}
 
 		if strings.HasPrefix(m, "/video-test") {

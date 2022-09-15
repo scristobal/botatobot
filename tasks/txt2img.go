@@ -1,4 +1,4 @@
-package worker
+package tasks
 
 import (
 	"fmt"
@@ -84,13 +84,13 @@ func clean(m string) string {
 	return m
 }
 
-func FromString(s string) ([]Txt2img, error) {
+func FromString(s string) ([]*Txt2img, error) {
 
 	s = clean(s)
 	ok := validate(s)
 
 	if !ok {
-		return []Txt2img{}, fmt.Errorf("invalid characters in prompt")
+		return []*Txt2img{}, fmt.Errorf("invalid characters in prompt")
 	}
 
 	hasSeed := false
@@ -108,7 +108,7 @@ func FromString(s string) ([]Txt2img, error) {
 			split := strings.Split(word, "_")
 
 			if len(split) < 2 {
-				return []Txt2img{}, fmt.Errorf("invalid parameter, format should be :param_value")
+				return []*Txt2img{}, fmt.Errorf("invalid parameter, format should be :param_value")
 			}
 
 			key := split[0]
@@ -118,35 +118,35 @@ func FromString(s string) ([]Txt2img, error) {
 			case "&seed":
 				seed, err := strconv.Atoi(value)
 				if err != nil {
-					return []Txt2img{}, fmt.Errorf("invalid seed, should be a number &seed_1234")
+					return []*Txt2img{}, fmt.Errorf("invalid seed, should be a number &seed_1234")
 				}
 				params.Seed = seed
 				hasSeed = true
 			case "&steps":
 				steps, err := strconv.Atoi(value)
 				if err != nil {
-					return []Txt2img{}, fmt.Errorf("invalid number of inference steps, should be a number &steps_50")
+					return []*Txt2img{}, fmt.Errorf("invalid number of inference steps, should be a number &steps_50")
 				}
 
 				if steps > 100 || steps < 1 {
-					return []Txt2img{}, fmt.Errorf("invalid number of inference steps, should be between 1 and 100 &steps_50")
+					return []*Txt2img{}, fmt.Errorf("invalid number of inference steps, should be between 1 and 100 &steps_50")
 				}
 
 				params.Num_inference_steps = steps
 			case "&guidance":
 				guidance, err := strconv.ParseFloat(value, 32)
 				if err != nil {
-					return []Txt2img{}, fmt.Errorf("invalid guidance scale, should be a rational number &guidance_7.5")
+					return []*Txt2img{}, fmt.Errorf("invalid guidance scale, should be a rational number &guidance_7.5")
 				}
 				fmt.Println("guidance", guidance)
 				if guidance > 20 || guidance < 1 {
-					return []Txt2img{}, fmt.Errorf("invalid guidance scale, should be between 1 and 20 &guidance_7.5")
+					return []*Txt2img{}, fmt.Errorf("invalid guidance scale, should be between 1 and 20 &guidance_7.5")
 
 				}
 				params.Guidance_scale = float32(guidance)
 
 			default:
-				return []Txt2img{}, fmt.Errorf("invalid parameter, format should be :param_value, allowed parameters are &seed_, &steps_, and &guidance_")
+				return []*Txt2img{}, fmt.Errorf("invalid parameter, format should be :param_value, allowed parameters are &seed_, &steps_, and &guidance_")
 			}
 
 			s = strings.ReplaceAll(s, word, "")
@@ -154,16 +154,16 @@ func FromString(s string) ([]Txt2img, error) {
 	}
 
 	if len(s) < 10 {
-		return []Txt2img{}, fmt.Errorf("prompt too short, should be at least 10 characters")
+		return []*Txt2img{}, fmt.Errorf("prompt too short, should be at least 10 characters")
 	}
 
 	params.Prompt = strings.TrimSpace(s)
 
 	if hasSeed {
-		return []Txt2img{params}, nil
+		return []*Txt2img{&params}, nil
 	}
 
-	jobs := make([]Txt2img, 4)
+	jobs := make([]*Txt2img, 4)
 
 	for i := 0; i < len(jobs); i++ {
 
@@ -176,7 +176,7 @@ func FromString(s string) ([]Txt2img, error) {
 			Guidance_scale:      params.Guidance_scale,
 		}
 
-		jobs[i] = job
+		jobs[i] = &job
 
 	}
 
@@ -196,7 +196,7 @@ func (j Txt2img) Result() ([]byte, error) {
 	return j.Output, j.Error
 }
 
-func (j Txt2img) String() string {
+func (j Txt2img) Describe() string {
 
 	res := fmt.Sprintf("%s &seed_%d &steps_%d &guidance_%1.f", j.Prompt, j.Seed, j.Num_inference_steps, j.Guidance_scale)
 

@@ -9,7 +9,8 @@ import (
 	"scristobal/botatobot/config"
 	"scristobal/botatobot/handlers"
 	"scristobal/botatobot/queue"
-	"scristobal/botatobot/worker"
+	"scristobal/botatobot/requests"
+	"scristobal/botatobot/tasks"
 	"time"
 
 	"github.com/go-telegram/bot"
@@ -34,11 +35,13 @@ func main() {
 
 	log.Println("Initializing work queue...")
 
-	queue := queue.New[worker.Request](ctx)
+	queue := queue.New[requests.Request[*tasks.Txt2img]](ctx)
 
 	log.Println("Creating bot...")
 
-	handlerUpdate := handlers.NewHandle(queue)
+	factory := requests.Builder(tasks.FromString)
+
+	handlerUpdate := handlers.NewHandle(queue, factory)
 
 	opts := []bot.Option{
 		bot.WithDefaultHandler(handlerUpdate),

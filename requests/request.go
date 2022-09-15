@@ -1,4 +1,4 @@
-package worker
+package requests
 
 import (
 	"encoding/json"
@@ -11,64 +11,75 @@ import (
 	"github.com/google/uuid"
 )
 
-type Request struct {
-	t   *Txt2img
-	id  uuid.UUID
-	msg *models.Message
+type Request[T job] struct {
+	task *T
+	id   uuid.UUID
+	msg  *models.Message
 }
 
-func New(m models.Message) ([]Request, error) {
-
-	jobs, err := FromString(m.Text)
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %s", err)
-	}
-
-	var requests []Request
-
-	for _, job := range jobs {
-		job := job
-		requests = append(requests, Request{&job, uuid.New(), &m})
-	}
-
-	return requests, nil
+type job interface {
+	Run()
+	Describe() string
+	Result() ([]byte, error)
 }
 
-func (r Request) Id() uuid.UUID {
+type Factory[T job] func(string) ([]T, error)
+
+func Builder[T job](factory Factory[T]) func(models.Message) ([]Request[T], error) {
+
+	return func(m models.Message) ([]Request[T], error) {
+		tasks, err := factory(m.Text)
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to create request: %s", err)
+		}
+
+		var requests []Request[T]
+
+		for _, task := range tasks {
+			task := task
+			requests = append(requests, Request[T]{&task, uuid.New(), &m})
+		}
+
+		return requests, nil
+	}
+}
+
+func (r Request[T]) Id() uuid.UUID {
 	return r.id
 }
 
-func (r Request) Msg() *models.Message {
+func (r Request[T]) Msg() *models.Message {
 	return r.msg
 }
 
-func (r Request) Run() {
-	r.t.Run()
+func (r Request[T]) Result() ([]byte, error) {
+	return (*r.task).Result()
+
 }
 
-func (r Request) Result() ([]byte, error) {
-	return r.t.Result()
+func (r Request[T]) Run() {
+	(*r.task).Run()
 }
 
-func (r Request) String() string {
-	return r.t.String()
+func (r Request[T]) String() string {
+	return (*r.task).Describe()
 }
 
-func (r *Request) MarshalJSON() ([]byte, error) {
+func (r *Request[T]) MarshalJSON() ([]byte, error) {
 	fmt.Println("marshalling request")
 	return json.Marshal(struct {
 		Id   uuid.UUID       `json:"id"`
 		Msg  *models.Message `json:"message"`
-		Task Txt2img         `json:"task"`
+		Task T               `json:"task"`
 	}{
 		r.id,
 		r.msg,
-		*r.t,
+		*r.task,
 	})
 }
 
-func (r *Request) SaveToDisk() error {
+func (r *Request[T]) SaveToDisk() error {
 
 	err := os.MkdirAll(config.OUTPUT_PATH, 0755)
 
