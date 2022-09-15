@@ -13,8 +13,8 @@ import (
 
 type Request struct {
 	t   *Txt2img
-	id  uuid.UUID       //`json:"id"`
-	msg *models.Message //`json:"message"`
+	id  uuid.UUID
+	msg *models.Message
 }
 
 func New(m models.Message) ([]Request, error) {
