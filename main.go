@@ -35,13 +35,13 @@ func main() {
 
 	log.Println("Initializing work queue...")
 
-	queue := queue.New[requests.Request[*tasks.Txt2img]](ctx)
+	factory := requests.Builder(tasks.FromString)
+
+	queue := queue.New(ctx, factory)
 
 	log.Println("Creating bot...")
 
-	factory := requests.Builder(tasks.FromString)
-
-	handlerUpdate := handlers.NewHandle(queue, factory)
+	handlerUpdate := handlers.NewHandler[requests.Request[*tasks.Txt2img]](queue)
 
 	opts := []bot.Option{
 		bot.WithDefaultHandler(handlerUpdate),

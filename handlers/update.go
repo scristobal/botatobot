@@ -10,16 +10,12 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"scristobal/botatobot/config"
 	"scristobal/botatobot/handlers/controllers"
-	"scristobal/botatobot/queue"
-	"scristobal/botatobot/requests"
 
 	"strings"
 
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
-	"github.com/google/uuid"
 )
 
 type Command string
@@ -44,15 +40,18 @@ func (c Command) String() string {
 	return "Unknown command"
 }
 
-type job interface {
+type request interface {
 	Run()
-	Describe() string
-	Result() ([]byte, error)
+	//Result() ([]byte, error)
 }
 
-type Factory[T job] func(models.Message) ([]requests.Request[T], error)
+type Queue[T request, M any] interface {
+	Push(item M) error
+	Len() int
+	Current() *T
+}
 
-func NewHandle[T job](q queue.Queue[requests.Request[T]], factory Factory[T]) func(context.Context, *bot.Bot, *models.Update) {
+func NewHandler[T request](q Queue[T, models.Message]) func(context.Context, *bot.Bot, *models.Update) {
 
 	return func(ctx context.Context, b *bot.Bot, update *models.Update) {
 
@@ -71,42 +70,10 @@ func NewHandle[T job](q queue.Queue[requests.Request[T]], factory Factory[T]) fu
 
 		m := update.Message.Text
 
-		id := uuid.New()
-
 		if strings.HasPrefix(m, string(Generate)) {
 
-			requests, err := factory(*message)
+			controllers.Generate[T](ctx, b, *message, q)
 
-			if err != nil {
-				b.SendMessage(ctx, &bot.SendMessageParams{
-					ChatID:           message.Chat.ID,
-					Text:             fmt.Sprintf("Sorry, but your request is somehow invalid 😬\n\n %s", err),
-					ReplyToMessageID: message.ID,
-				})
-				log.Printf("User %s requested %s but rejected", message.From.Username, err)
-				return
-			}
-
-			log.Printf("User %s requested %s accepted\n", message.From.Username, id)
-
-			if q.Len() >= config.MAX_JOBS {
-				b.SendMessage(ctx,
-					&bot.SendMessageParams{
-						ChatID:           message.Chat.ID,
-						Text:             "Sorry, but the job queue reached its maximum, try again later 🙄",
-						ReplyToMessageID: message.ID,
-					})
-
-				log.Println("User", message.From.Username, "request rejected, queue full")
-				return
-			}
-
-			log.Printf("User %s request accepted, job id %s", message.From.Username, id)
-
-			for _, req := range requests {
-				req := req
-				q.Push(req)
-			}
 		}
 
 		if strings.HasPrefix(m, string(Help)) {
@@ -114,35 +81,7 @@ func NewHandle[T job](q queue.Queue[requests.Request[T]], factory Factory[T]) fu
 		}
 
 		if strings.HasPrefix(m, string(Status)) {
-			job := q.Current()
-
-			numJobs := q.Len()
-
-			if job == nil && numJobs == 0 {
-				b.SendMessage(ctx, &bot.SendMessageParams{
-					ChatID: message.Chat.ID,
-					Text:   "I am doing nothing and there are no jobs in the queue 🤖",
-				})
-				return
-			}
-
-			if job != nil {
-
-				b.SendMessage(ctx, &bot.SendMessageParams{
-					ChatID: message.Chat.ID,
-					Text:   fmt.Sprintf("I am generating an image and the queue has %d more jobs", numJobs),
-				})
-				return
-			}
-
-			if numJobs > 0 {
-				b.SendMessage(ctx, &bot.SendMessageParams{
-					ChatID: message.Chat.ID,
-					Text:   fmt.Sprintf("I am doing nothing and the queue has %d more jobs. That's weird!! ", numJobs),
-				})
-				return
-			}
-
+			controllers.Status[T](ctx, b, *message, q)
 		}
 
 		if strings.HasPrefix(m, "/video-test") {

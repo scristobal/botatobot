@@ -2,6 +2,7 @@ package queue
 
 import (
 	"context"
+	"fmt"
 	"scristobal/botatobot/config"
 	"sync"
 )
@@ -10,7 +11,8 @@ type job interface {
 	Run()
 }
 
-type Queue[T job] struct {
+type Queue[T job, M any] struct {
+	gen     func(M) ([]T, error)
 	current *struct {
 		job *T
 		mut sync.RWMutex
@@ -19,7 +21,7 @@ type Queue[T job] struct {
 	done    chan T
 }
 
-func New[T job](ctx context.Context) Queue[T] {
+func New[T job, M any](ctx context.Context, generator func(M) ([]T, error)) Queue[T, M] {
 
 	pending := make(chan T, config.MAX_JOBS)
 
@@ -54,23 +56,37 @@ func New[T job](ctx context.Context) Queue[T] {
 		}
 	}()
 
-	return Queue[T]{current, pending, done}
+	return Queue[T, M]{generator, current, pending, done}
 
 }
 
-func (q *Queue[T]) Push(job T) {
-	q.pending <- job
+func (q Queue[T, M]) Push(item M) error {
+	jobs, err := q.gen(item)
+
+	if err != nil {
+		return fmt.Errorf("failed to create job: %s", err)
+	}
+
+	if len(jobs) > config.MAX_JOBS {
+		return fmt.Errorf("too many jobs")
+	}
+
+	for _, job := range jobs {
+		q.pending <- job
+	}
+
+	return nil
 }
 
-func (q *Queue[T]) Pop() T {
+func (q Queue[T, M]) Pop() T {
 	return <-q.done
 }
 
-func (q *Queue[T]) Len() int {
+func (q Queue[T, M]) Len() int {
 	return len(q.pending)
 }
 
-func (q *Queue[T]) Current() *T {
+func (q Queue[T, M]) Current() *T {
 	q.current.mut.RLock()
 	defer q.current.mut.RUnlock()
 	return q.current.job
