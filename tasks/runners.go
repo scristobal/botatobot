@@ -60,7 +60,7 @@ func localRunner(j *Txt2img) ([]byte, error) {
 }
 
 func remoteRunner(j *Txt2img) ([]byte, error) {
-
+	fmt.Println("got job")
 	input, err := json.Marshal(j)
 
 	if err != nil {

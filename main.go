@@ -35,8 +35,20 @@ func main() {
 
 	log.Println("Initializing work queue...")
 
-	requestFactory := func(m models.Message) ([]*tasks.Txt2img, error) {
-		return tasks.FromString(m.Text)
+	requestFactory := func(m models.Message) ([]*scheduler.Runner[*tasks.Txt2img], error) {
+		unwrappedTasks, err := tasks.FromString(m.Text)
+
+		if err != nil {
+			return nil, err
+		}
+
+		requests := make([]*scheduler.Runner[*tasks.Txt2img], len(unwrappedTasks))
+
+		for i, t := range unwrappedTasks {
+			requests[i] = &scheduler.Runner[*tasks.Txt2img]{Runner: t}
+		}
+
+		return requests, nil
 	}
 
 	queue := scheduler.NewQueue(ctx, requestFactory)
@@ -52,10 +64,10 @@ func main() {
 	queue.RegisterBot(b)
 
 	log.Println("listening to job queue...")
-	go func() { queue.Start() }()
+	go queue.Start()
 
 	log.Println("listening to messages...")
-	go func() { b.Start(ctx) }()
+	go b.Start(ctx)
 
 	<-ctx.Done()
 }

@@ -11,12 +11,6 @@ import (
 	"github.com/google/uuid"
 )
 
-type Request[T job] struct {
-	task *T
-	id   uuid.UUID
-	msg  *models.Message
-}
-
 func (r Request[T]) Id() uuid.UUID {
 	return r.id
 }
@@ -26,36 +20,35 @@ func (r Request[T]) Msg() *models.Message {
 }
 
 func (r Request[T]) Result() ([]byte, error) {
-	return (*r.task).Result()
+	return r.task.Runner.Result()
 
 }
 
 func (r Request[T]) Run() {
-	(*r.task).Run()
+	r.task.Runner.Launch()
 }
 
 func (r Request[T]) Describe() string {
-	return (*r.task).Describe()
+	return r.task.Runner.Describe()
 }
 
-func (r Request[T]) Job() T {
-	return *r.task
+func (r Request[T]) Job() task {
+	return r.task.Runner
 }
 
 func (r Request[T]) String() string {
-	return (*r.task).Describe()
+	return r.task.Runner.Describe()
 }
 
 func (r Request[T]) MarshalJSON() ([]byte, error) {
-	fmt.Println("marshalling request")
 	return json.Marshal(struct {
-		Id   uuid.UUID       `json:"id"`
-		Msg  *models.Message `json:"message"`
-		Task T               `json:"task"`
+		Id     uuid.UUID       `json:"id"`
+		Msg    *models.Message `json:"message"`
+		Runner T               `json:"task"`
 	}{
 		r.id,
 		r.msg,
-		*r.task,
+		r.task.Runner,
 	})
 }
 

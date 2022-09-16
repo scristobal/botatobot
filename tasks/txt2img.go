@@ -17,7 +17,7 @@ type Txt2img struct {
 	Guidance_scale      float32 `json:"guidance_scale,omitempty"`
 	Output              []byte  `json:"-"` // not serialized
 	Error               error   `json:"error,omitempty"`
-	Runner              string
+	Env                 string
 }
 
 type apiResponse struct {
@@ -141,9 +141,10 @@ func getPrompt(s string) (string, error) {
 func buildConfig(prompt string, params map[string]string) (Txt2img, error) {
 
 	config := Txt2img{
+		Prompt:              prompt,
 		Num_inference_steps: 50,
 		Guidance_scale:      7.5,
-		Runner:              "remote",
+		Env:                 "remote",
 	}
 
 	for key, value := range params {
@@ -171,7 +172,6 @@ func buildConfig(prompt string, params map[string]string) (Txt2img, error) {
 			if err != nil {
 				return config, fmt.Errorf("invalid guidance scale, should be a rational number &guidance_7.5")
 			}
-			fmt.Println("guidance", guidance)
 			if guidance > 20 || guidance < 1 {
 				return config, fmt.Errorf("invalid guidance scale, should be between 1 and 20 &guidance_7.5")
 
@@ -211,7 +211,7 @@ func FromString(s string) ([]*Txt2img, error) {
 	// special case, if no seed is provided we generate 5 images with different seeds
 	_, ok := userParams["&seed"]
 
-	if !ok {
+	if ok {
 		return []*Txt2img{&params}, nil
 	}
 
@@ -226,6 +226,7 @@ func FromString(s string) ([]*Txt2img, error) {
 			Prompt:              params.Prompt,
 			Num_inference_steps: params.Num_inference_steps,
 			Guidance_scale:      params.Guidance_scale,
+			Env:                 params.Env,
 		}
 
 		jobs[i] = &job
@@ -235,20 +236,19 @@ func FromString(s string) ([]*Txt2img, error) {
 	return jobs, nil
 }
 
-func (j Txt2img) Run() {
-
-	if j.Runner == "remote" {
-		j.Output, j.Error = remoteRunner(&j)
+func (j *Txt2img) Launch() {
+	if j.Env == "remote" {
+		j.Output, j.Error = remoteRunner(j)
 	} else {
-		j.Output, j.Error = localRunner(&j)
+		j.Output, j.Error = localRunner(j)
 	}
 }
 
-func (j Txt2img) Result() ([]byte, error) {
+func (j *Txt2img) Result() ([]byte, error) {
 	return j.Output, j.Error
 }
 
-func (j Txt2img) Describe() string {
+func (j *Txt2img) Describe() string {
 
 	res := fmt.Sprintf("%s &seed_%d &steps_%d &guidance_%1.f", j.Prompt, j.Seed, j.Num_inference_steps, j.Guidance_scale)
 

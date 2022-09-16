@@ -13,39 +13,39 @@ import (
 	"github.com/google/uuid"
 )
 
-type job interface {
-	Run()
+type task interface {
+	Launch()
 	Describe() string
 	Result() ([]byte, error)
 }
 
-type request[T job] interface {
-	Job() T
-	Id() uuid.UUID
-	Msg() *models.Message
-	Result() ([]byte, error)
-	SaveToDisk() error
+type Request[T task] struct {
+	task *Runner[T]
+	id   uuid.UUID
+	msg  *models.Message
 }
 
-type Queue[R request[T], T job] struct {
-	requestFactory func(models.Message) ([]R, error)
+type Runner[T task] struct {
+	Runner T
+}
+
+type Queue[T task] struct {
+	requestFactory func(models.Message) ([]Request[T], error)
 	current        *struct {
-		req *R
+		req *Request[T]
 		mut sync.RWMutex
 	}
-	pending chan R
-	done    chan R
+	pending chan Request[T]
+	done    chan Request[T]
 	bot     *bot.Bot
 	ctx     context.Context
 }
 
-type generator[T job] func(M models.Message) ([]T, error)
-
-func NewQueue[T job](ctx context.Context, generator generator[T]) Queue[Request[T], T] {
+func NewQueue[T task](ctx context.Context, generator func(M models.Message) ([]*Runner[T], error)) Queue[T] {
 
 	requestGenerator := func(m models.Message) ([]Request[T], error) {
 
-		jobs, err := generator(m)
+		tasks, err := generator(m)
 
 		if err != nil {
 
@@ -55,9 +55,9 @@ func NewQueue[T job](ctx context.Context, generator generator[T]) Queue[Request[
 
 		var requests []Request[T]
 
-		for _, job := range jobs {
-			job := job
-			requests = append(requests, Request[T]{&job, uuid.New(), &m})
+		for _, task := range tasks {
+			task := task
+			requests = append(requests, Request[T]{task, uuid.New(), &m})
 		}
 
 		return requests, nil
@@ -72,99 +72,99 @@ func NewQueue[T job](ctx context.Context, generator generator[T]) Queue[Request[
 		mut sync.RWMutex
 	}{}
 
-	return Queue[Request[T], T]{requestGenerator, current, pending, done, nil, ctx}
+	return Queue[T]{requestGenerator, current, pending, done, nil, ctx}
 
 }
 
-func (q Queue[R, T]) Push(msg models.Message) error {
-	jobs, err := q.requestFactory(msg)
+func (q Queue[T]) Push(msg models.Message) error {
+	tasks, err := q.requestFactory(msg)
 
 	if err != nil {
-		return fmt.Errorf("failed to create job: %s", err)
+		return fmt.Errorf("failed to create tasks: %s", err)
 	}
 
-	if len(jobs) > config.MAX_JOBS {
+	if len(tasks) > config.MAX_JOBS {
 		return fmt.Errorf("too many jobs")
 	}
 
-	for _, job := range jobs {
-		q.pending <- job
+	for _, task := range tasks {
+		q.pending <- task
 	}
 
 	return nil
 }
 
-func (q Queue[R, T]) Pop() R {
+func (q Queue[T]) Pop() Request[T] {
 	return <-q.done
 }
 
-func (q Queue[R, T]) Len() int {
+func (q Queue[T]) Len() int {
 	return len(q.pending)
 }
 
-func (q Queue[R, T]) IsWorking() bool {
+func (q Queue[T]) IsWorking() bool {
 	q.current.mut.RLock()
 	defer q.current.mut.RUnlock()
 
 	return q.current.req != nil
 }
 
-func (q *Queue[R, T]) RegisterBot(b *bot.Bot) {
+func (q *Queue[T]) RegisterBot(b *bot.Bot) {
 	q.bot = b
 }
 
-func (queue Queue[R, T]) Start() func() {
-	return func() {
-		go func() {
-			for {
-				select {
-				case <-queue.ctx.Done():
-					return
-				default:
-					req := queue.Pop()
+func (queue Queue[T]) Start() {
 
-					_, err := req.Result()
+	go func() {
+		for {
+			select {
+			case <-queue.ctx.Done():
+				return
+			default:
+				req := queue.Pop()
 
-					if err != nil {
-						log.Printf("Error processing request %s: %v", req.Id(), err)
-					}
+				_, err := req.task.Runner.Result()
 
-					err = handlers.Request(queue.ctx, queue.bot, req)
+				if err != nil {
+					log.Printf("Error processing request %s: %v", req.Id(), err)
+				}
 
-					if err != nil {
-						log.Printf("Error notifying user of %s: %v", req.Id(), err)
-					}
+				err = handlers.Request(queue.ctx, queue.bot, req)
 
-					err = req.SaveToDisk()
-					if err != nil {
-						log.Printf("Error saving request %s to disk: %v", req.Id(), err)
-					}
+				if err != nil {
+					log.Printf("Error notifying user of %s: %v", req.Id(), err)
+				}
+
+				err = req.SaveToDisk()
+				if err != nil {
+					log.Printf("Error saving request %s to disk: %v", req.Id(), err)
 				}
 			}
-		}()
-		go func() {
-			for {
-				select {
-				case <-queue.ctx.Done():
-					return
-				case req := <-queue.pending:
-					{
+		}
+	}()
+	go func() {
+		for {
+			select {
+			case <-queue.ctx.Done():
+				return
+			case req := <-queue.pending:
+				func() {
+					queue.current.mut.Lock()
+					queue.current.req = &req
+					queue.current.mut.Unlock()
+
+					defer func() {
 						queue.current.mut.Lock()
-						queue.current.req = &req
+						queue.current.req = nil
 						queue.current.mut.Unlock()
+					}()
 
-						defer func() {
-							queue.current.mut.Lock()
-							queue.current.req = nil
-							queue.current.mut.Unlock()
-						}()
-
-						req.Job().Run()
-						queue.done <- req
-					}
-				}
+					req.Job().Launch()
+					queue.done <- req
+				}()
 			}
-		}()
-	}
+		}
+	}()
+	<-queue.ctx.Done()
 
 }
