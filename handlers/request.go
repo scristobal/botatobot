@@ -11,13 +11,14 @@ import (
 	"github.com/google/uuid"
 )
 
-type Req interface {
+type req interface {
 	Id() uuid.UUID
 	Msg() *models.Message
 	Result() ([]byte, error)
+	SaveToDisk() error
 }
 
-func Request(ctx context.Context, b *bot.Bot, req Req) error {
+func Request(ctx context.Context, b *bot.Bot, req req) error {
 
 	message := req.Msg()
 

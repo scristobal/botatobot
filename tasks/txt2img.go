@@ -68,7 +68,15 @@ func removeMentions(m string) string {
 	return m
 }
 
+func removeConsecutiveSpaces(s string) string {
+	re := regexp.MustCompile(`\s+`)
+	return re.ReplaceAllString(s, " ")
+}
+
 func clean(m string) string {
+
+	m = removeConsecutiveSpaces(m)
+
 	m = removeMentions(m)
 
 	m = removeCommands(m)
@@ -77,29 +85,12 @@ func clean(m string) string {
 
 	m = strings.TrimSpace(m)
 
-	// removes consecutive spaces
-	reg := regexp.MustCompile(`\s+`)
-	m = reg.ReplaceAllString(m, " ")
-
 	return m
 }
 
-func FromString(s string) ([]*Txt2img, error) {
+func getParams(s string) (map[string]string, error) {
 
-	s = clean(s)
-	ok := validate(s)
-
-	if !ok {
-		return []*Txt2img{}, fmt.Errorf("invalid characters in prompt")
-	}
-
-	hasSeed := false
-
-	params := Txt2img{
-		Num_inference_steps: 50,
-		Guidance_scale:      7.5,
-		Runner:              "remote",
-	}
+	result := make(map[string]string)
 
 	words := strings.Split(s, " ")
 
@@ -107,59 +98,120 @@ func FromString(s string) ([]*Txt2img, error) {
 		if len(word) > 0 && word[0] == byte('&') {
 			split := strings.Split(word, "_")
 
-			if len(split) < 2 {
-				return []*Txt2img{}, fmt.Errorf("invalid parameter, format should be :param_value")
+			if len(split) != 2 {
+				return result, fmt.Errorf("invalid parameter %s, format should be :param_value", word)
 			}
 
-			key := split[0]
-			value := split[1]
-
-			switch key {
-			case "&seed":
-				seed, err := strconv.Atoi(value)
-				if err != nil {
-					return []*Txt2img{}, fmt.Errorf("invalid seed, should be a number &seed_1234")
-				}
-				params.Seed = seed
-				hasSeed = true
-			case "&steps":
-				steps, err := strconv.Atoi(value)
-				if err != nil {
-					return []*Txt2img{}, fmt.Errorf("invalid number of inference steps, should be a number &steps_50")
-				}
-
-				if steps > 100 || steps < 1 {
-					return []*Txt2img{}, fmt.Errorf("invalid number of inference steps, should be between 1 and 100 &steps_50")
-				}
-
-				params.Num_inference_steps = steps
-			case "&guidance":
-				guidance, err := strconv.ParseFloat(value, 32)
-				if err != nil {
-					return []*Txt2img{}, fmt.Errorf("invalid guidance scale, should be a rational number &guidance_7.5")
-				}
-				fmt.Println("guidance", guidance)
-				if guidance > 20 || guidance < 1 {
-					return []*Txt2img{}, fmt.Errorf("invalid guidance scale, should be between 1 and 20 &guidance_7.5")
-
-				}
-				params.Guidance_scale = float32(guidance)
-
-			default:
-				return []*Txt2img{}, fmt.Errorf("invalid parameter, format should be :param_value, allowed parameters are &seed_, &steps_, and &guidance_")
-			}
-
-			s = strings.ReplaceAll(s, word, "")
+			result[split[0]] = split[1]
 		}
 	}
 
-	if len(s) < 10 {
-		return []*Txt2img{}, fmt.Errorf("prompt too short, should be at least 10 characters")
+	return result, nil
+}
+
+func getPrompt(s string) (string, error) {
+
+	s = clean(s)
+	ok := validate(s)
+
+	if !ok {
+		return "", fmt.Errorf("invalid characters in prompt")
 	}
 
-	params.Prompt = strings.TrimSpace(s)
+	words := strings.Split(s, " ")
 
-	if hasSeed {
+	var result []string
+
+	for _, w := range words {
+		if len(w) > 0 && w[0] != byte('&') {
+			result = append(result, w)
+		}
+	}
+
+	prompt := strings.Join(result, " ")
+
+	if len(prompt) < 10 {
+		return "", fmt.Errorf("prompt too short, should be at least 10 characters")
+	}
+
+	return prompt, nil
+
+}
+
+func buildConfig(prompt string, params map[string]string) (Txt2img, error) {
+
+	config := Txt2img{
+		Num_inference_steps: 50,
+		Guidance_scale:      7.5,
+		Runner:              "remote",
+	}
+
+	for key, value := range params {
+		switch key {
+		case "&seed":
+			seed, err := strconv.Atoi(value)
+			if err != nil {
+				return config, fmt.Errorf("invalid seed, should be a number &seed_1234")
+			}
+			config.Seed = seed
+
+		case "&steps":
+			steps, err := strconv.Atoi(value)
+			if err != nil {
+				return config, fmt.Errorf("invalid number of inference steps, should be a number &steps_50")
+			}
+
+			if steps > 100 || steps < 1 {
+				return config, fmt.Errorf("invalid number of inference steps, should be between 1 and 100 &steps_50")
+			}
+
+			config.Num_inference_steps = steps
+		case "&guidance":
+			guidance, err := strconv.ParseFloat(value, 32)
+			if err != nil {
+				return config, fmt.Errorf("invalid guidance scale, should be a rational number &guidance_7.5")
+			}
+			fmt.Println("guidance", guidance)
+			if guidance > 20 || guidance < 1 {
+				return config, fmt.Errorf("invalid guidance scale, should be between 1 and 20 &guidance_7.5")
+
+			}
+			config.Guidance_scale = float32(guidance)
+
+		default:
+			return config, fmt.Errorf("invalid parameter, format should be :param_value, allowed parameters are &seed_, &steps_, and &guidance_")
+		}
+
+	}
+
+	return config, nil
+
+}
+
+func FromString(s string) ([]*Txt2img, error) {
+
+	prompt, err := getPrompt(s)
+
+	if err != nil {
+		return nil, fmt.Errorf("invalid prompt: %s", err)
+	}
+
+	userParams, err := getParams(s)
+
+	if err != nil {
+		return nil, fmt.Errorf("invalid parameters: %s", err)
+	}
+
+	params, err := buildConfig(prompt, userParams)
+
+	if err != nil {
+		return []*Txt2img{}, fmt.Errorf("invalid parameters, %s", err)
+	}
+
+	// special case, if no seed is provided we generate 5 images with different seeds
+	_, ok := userParams["&seed"]
+
+	if !ok {
 		return []*Txt2img{&params}, nil
 	}
 
@@ -183,12 +235,12 @@ func FromString(s string) ([]*Txt2img, error) {
 	return jobs, nil
 }
 
-func (j *Txt2img) Run() {
+func (j Txt2img) Run() {
 
 	if j.Runner == "remote" {
-		j.Output, j.Error = remoteRunner(j)
+		j.Output, j.Error = remoteRunner(&j)
 	} else {
-		j.Output, j.Error = localRunner(j)
+		j.Output, j.Error = localRunner(&j)
 	}
 }
 

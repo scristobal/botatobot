@@ -1,4 +1,4 @@
-package requests
+package scheduler
 
 import (
 	"encoding/json"
@@ -15,34 +15,6 @@ type Request[T job] struct {
 	task *T
 	id   uuid.UUID
 	msg  *models.Message
-}
-
-type job interface {
-	Run()
-	Describe() string
-	Result() ([]byte, error)
-}
-
-type Factory[T job] func(string) ([]T, error)
-
-func Builder[T job](factory Factory[T]) func(models.Message) ([]Request[T], error) {
-
-	return func(m models.Message) ([]Request[T], error) {
-		tasks, err := factory(m.Text)
-
-		if err != nil {
-			return nil, fmt.Errorf("failed to create request: %s", err)
-		}
-
-		var requests []Request[T]
-
-		for _, task := range tasks {
-			task := task
-			requests = append(requests, Request[T]{&task, uuid.New(), &m})
-		}
-
-		return requests, nil
-	}
 }
 
 func (r Request[T]) Id() uuid.UUID {
@@ -62,11 +34,19 @@ func (r Request[T]) Run() {
 	(*r.task).Run()
 }
 
+func (r Request[T]) Describe() string {
+	return (*r.task).Describe()
+}
+
+func (r Request[T]) Job() T {
+	return *r.task
+}
+
 func (r Request[T]) String() string {
 	return (*r.task).Describe()
 }
 
-func (r *Request[T]) MarshalJSON() ([]byte, error) {
+func (r Request[T]) MarshalJSON() ([]byte, error) {
 	fmt.Println("marshalling request")
 	return json.Marshal(struct {
 		Id   uuid.UUID       `json:"id"`
@@ -79,7 +59,7 @@ func (r *Request[T]) MarshalJSON() ([]byte, error) {
 	})
 }
 
-func (r *Request[T]) SaveToDisk() error {
+func (r Request[T]) SaveToDisk() error {
 
 	err := os.MkdirAll(config.OUTPUT_PATH, 0755)
 
