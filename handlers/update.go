@@ -41,7 +41,7 @@ type queue interface {
 
 type Handler = func(context.Context, *bot.Bot, *models.Update)
 
-func NewHandler[T any](q queue) Handler {
+func NewHandler(q queue) Handler {
 
 	return func(ctx context.Context, b *bot.Bot, update *models.Update) {
 
@@ -61,7 +61,7 @@ func NewHandler[T any](q queue) Handler {
 		m := update.Message.Text
 
 		if strings.HasPrefix(m, string(Generate)) {
-			controllers.Generate[T](ctx, b, *message, q)
+			controllers.Generate(ctx, b, *message, q)
 		}
 
 		if strings.HasPrefix(m, string(Help)) {

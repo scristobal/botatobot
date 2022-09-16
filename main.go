@@ -43,7 +43,7 @@ func main() {
 
 	log.Println("Starting bot...")
 
-	handlerUpdate := handlers.NewHandler[scheduler.Request[*tasks.Txt2img]](queue)
+	handlerUpdate := handlers.NewHandler(queue)
 
 	opts := []bot.Option{bot.WithDefaultHandler(handlerUpdate)}
 

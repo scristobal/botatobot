@@ -14,7 +14,7 @@ type msgPusher interface {
 	Push(item models.Message) error
 }
 
-func Generate[T any](ctx context.Context, b *bot.Bot, message models.Message, q msgPusher) {
+func Generate(ctx context.Context, b *bot.Bot, message models.Message, q msgPusher) {
 
 	err := q.Push(message)
 
