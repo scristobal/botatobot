@@ -1,4 +1,4 @@
-package scheduler
+package botatobot
 
 import (
 	"encoding/json"
@@ -10,6 +10,12 @@ import (
 	"github.com/go-telegram/bot/models"
 	"github.com/google/uuid"
 )
+
+type Request struct {
+	task Txt2img
+	id   uuid.UUID
+	msg  *models.Message
+}
 
 func (r Request) Id() uuid.UUID {
 	return r.id

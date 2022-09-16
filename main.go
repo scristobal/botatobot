@@ -6,9 +6,8 @@ import (
 	"math/rand"
 	"os"
 	"os/signal"
+	"scristobal/botatobot/botatobot"
 	"scristobal/botatobot/config"
-	"scristobal/botatobot/handlers"
-	"scristobal/botatobot/scheduler"
 	"time"
 
 	"github.com/go-telegram/bot"
@@ -33,13 +32,13 @@ func main() {
 
 	log.Println("Initializing work queue...")
 
-	queue := scheduler.NewQueue(ctx)
+	queue := botatobot.NewQueue(ctx)
 
 	log.Println("Starting bot...")
 
-	handlerUpdate := handlers.NewHandler(queue)
+	handler := botatobot.NewHandler(queue)
 
-	opts := []bot.Option{bot.WithDefaultHandler(handlerUpdate)}
+	opts := []bot.Option{bot.WithDefaultHandler(handler)}
 
 	b := bot.New(config.BOT_TOKEN, opts...)
 

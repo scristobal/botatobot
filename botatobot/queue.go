@@ -1,34 +1,25 @@
-package scheduler
+package botatobot
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"log"
+	"path/filepath"
 	"scristobal/botatobot/config"
-	"scristobal/botatobot/handlers"
-	"sync"
 
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 	"github.com/google/uuid"
 )
 
-type Request struct {
-	task Txt2img
-	id   uuid.UUID
-	msg  *models.Message
-}
-
 type Queue struct {
 	requestFactory func(models.Message) ([]Request, error)
-	current        *struct {
-		req *Request
-		mut sync.RWMutex
-	}
-	pending chan Request
-	done    chan Request
-	bot     *bot.Bot
-	ctx     context.Context
+	current        *Request
+	pending        chan Request
+	done           chan Request
+	bot            *bot.Bot
+	ctx            context.Context
 }
 
 func NewQueue(ctx context.Context) Queue {
@@ -62,12 +53,7 @@ func NewQueue(ctx context.Context) Queue {
 
 	done := make(chan Request, config.MAX_JOBS)
 
-	current := &struct {
-		req *Request
-		mut sync.RWMutex
-	}{}
-
-	return Queue{requestGenerator, current, pending, done, nil, ctx}
+	return Queue{requestGenerator, nil, pending, done, nil, ctx}
 
 }
 
@@ -89,34 +75,26 @@ func (q Queue) Push(msg models.Message) error {
 	return nil
 }
 
-func (q Queue) Pop() Request {
-	return <-q.done
-}
-
 func (q Queue) Len() int {
 	return len(q.pending)
 }
 
 func (q Queue) IsWorking() bool {
-	q.current.mut.RLock()
-	defer q.current.mut.RUnlock()
-
-	return q.current.req != nil
+	return q.current != nil
 }
 
 func (q *Queue) RegisterBot(b *bot.Bot) {
 	q.bot = b
 }
 
-func (queue Queue) Start() {
-
+func (q Queue) Start() {
 	go func() {
 		for {
 			select {
-			case <-queue.ctx.Done():
+			case <-q.ctx.Done():
 				return
 			default:
-				req := queue.Pop()
+				req := <-q.done
 
 				_, err := req.task.Result()
 
@@ -124,7 +102,7 @@ func (queue Queue) Start() {
 					log.Printf("Error processing request %s: %v", req.Id(), err)
 				}
 
-				err = handlers.Request(queue.ctx, queue.bot, req)
+				err = q.send(req)
 
 				if err != nil {
 					log.Printf("Error notifying user of %s: %v", req.Id(), err)
@@ -140,26 +118,51 @@ func (queue Queue) Start() {
 	go func() {
 		for {
 			select {
-			case <-queue.ctx.Done():
+			case <-q.ctx.Done():
 				return
-			case req := <-queue.pending:
+			case req := <-q.pending:
 				func() {
-					queue.current.mut.Lock()
-					queue.current.req = &req
-					queue.current.mut.Unlock()
+
+					q.current = &req
 
 					defer func() {
-						queue.current.mut.Lock()
-						queue.current.req = nil
-						queue.current.mut.Unlock()
+						q.current = nil
 					}()
 
 					req.task.Launch()
-					queue.done <- req
+					q.done <- req
 				}()
 			}
 		}
 	}()
-	<-queue.ctx.Done()
+	<-q.ctx.Done()
+}
 
+func (q Queue) send(req Request) error {
+	message := req.Msg()
+
+	res, err := req.Result()
+
+	if err != nil {
+
+		_, err := q.bot.SendMessage(q.ctx, &bot.SendMessageParams{
+			ChatID:           message.Chat.ID,
+			Text:             fmt.Sprintf("Sorry, but something went wrong 😭 %s", err),
+			ReplyToMessageID: message.ID,
+		})
+
+		return err
+	}
+
+	_, err = q.bot.SendPhoto(q.ctx, &bot.SendPhotoParams{
+		ChatID:  message.Chat.ID,
+		Caption: fmt.Sprint(req),
+		Photo: &models.InputFileUpload{
+			Data:     bytes.NewReader(res),
+			Filename: filepath.Base(fmt.Sprintf("%s.png", req.Id())),
+		},
+		DisableNotification: true,
+	})
+
+	return err
 }
