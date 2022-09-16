@@ -9,11 +9,9 @@ import (
 	"scristobal/botatobot/config"
 	"scristobal/botatobot/handlers"
 	"scristobal/botatobot/scheduler"
-	"scristobal/botatobot/tasks"
 	"time"
 
 	"github.com/go-telegram/bot"
-	"github.com/go-telegram/bot/models"
 )
 
 func main() {
@@ -35,23 +33,7 @@ func main() {
 
 	log.Println("Initializing work queue...")
 
-	requestFactory := func(m models.Message) ([]*scheduler.Runner[*tasks.Txt2img], error) {
-		unwrappedTasks, err := tasks.FromString(m.Text)
-
-		if err != nil {
-			return nil, err
-		}
-
-		requests := make([]*scheduler.Runner[*tasks.Txt2img], len(unwrappedTasks))
-
-		for i, t := range unwrappedTasks {
-			requests[i] = &scheduler.Runner[*tasks.Txt2img]{Runner: t}
-		}
-
-		return requests, nil
-	}
-
-	queue := scheduler.NewQueue(ctx, requestFactory)
+	queue := scheduler.NewQueue(ctx)
 
 	log.Println("Starting bot...")
 

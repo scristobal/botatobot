@@ -15,7 +15,6 @@ type req interface {
 	Id() uuid.UUID
 	Msg() *models.Message
 	Result() ([]byte, error)
-	SaveToDisk() error
 }
 
 func Request(ctx context.Context, b *bot.Bot, req req) error {

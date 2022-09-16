@@ -11,48 +11,35 @@ import (
 	"github.com/google/uuid"
 )
 
-func (r Request[T]) Id() uuid.UUID {
+func (r Request) Id() uuid.UUID {
 	return r.id
 }
 
-func (r Request[T]) Msg() *models.Message {
+func (r Request) Msg() *models.Message {
 	return r.msg
 }
 
-func (r Request[T]) Result() ([]byte, error) {
-	return r.task.Runner.Result()
-
+func (r Request) Result() ([]byte, error) {
+	return r.task.Result()
 }
 
-func (r Request[T]) Run() {
-	r.task.Runner.Launch()
+func (r Request) String() string {
+	return r.task.Describe()
 }
 
-func (r Request[T]) Describe() string {
-	return r.task.Runner.Describe()
-}
-
-func (r Request[T]) Job() task {
-	return r.task.Runner
-}
-
-func (r Request[T]) String() string {
-	return r.task.Runner.Describe()
-}
-
-func (r Request[T]) MarshalJSON() ([]byte, error) {
+func (r Request) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
 		Id     uuid.UUID       `json:"id"`
 		Msg    *models.Message `json:"message"`
-		Runner T               `json:"task"`
+		Runner Txt2img         `json:"task"`
 	}{
 		r.id,
 		r.msg,
-		r.task.Runner,
+		r.task,
 	})
 }
 
-func (r Request[T]) SaveToDisk() error {
+func (r Request) SaveToDisk() error {
 
 	err := os.MkdirAll(config.OUTPUT_PATH, 0755)
 
@@ -60,7 +47,7 @@ func (r Request[T]) SaveToDisk() error {
 		return fmt.Errorf("failed to create output directory: %s", err)
 	}
 
-	img, err := r.Result()
+	img, err := r.task.Result()
 
 	if err != nil {
 		return fmt.Errorf("failed to get result: %s", err)

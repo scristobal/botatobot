@@ -13,39 +13,34 @@ import (
 	"github.com/google/uuid"
 )
 
-type task interface {
-	Launch()
-	Describe() string
-	Result() ([]byte, error)
-}
-
-type Request[T task] struct {
-	task *Runner[T]
+type Request struct {
+	task Txt2img
 	id   uuid.UUID
 	msg  *models.Message
 }
 
-type Runner[T task] struct {
-	Runner T
-}
-
-type Queue[T task] struct {
-	requestFactory func(models.Message) ([]Request[T], error)
+type Queue struct {
+	requestFactory func(models.Message) ([]Request, error)
 	current        *struct {
-		req *Request[T]
+		req *Request
 		mut sync.RWMutex
 	}
-	pending chan Request[T]
-	done    chan Request[T]
+	pending chan Request
+	done    chan Request
 	bot     *bot.Bot
 	ctx     context.Context
 }
 
-func NewQueue[T task](ctx context.Context, generator func(M models.Message) ([]*Runner[T], error)) Queue[T] {
+func NewQueue(ctx context.Context) Queue {
 
-	requestGenerator := func(m models.Message) ([]Request[T], error) {
+	requestGenerator := func(m models.Message) ([]Request, error) {
 
-		tasks, err := generator(m)
+		requestFactory := func(m models.Message) ([]*Txt2img, error) {
+			return FromString(m.Text)
+
+		}
+
+		tasks, err := requestFactory(m)
 
 		if err != nil {
 
@@ -53,30 +48,30 @@ func NewQueue[T task](ctx context.Context, generator func(M models.Message) ([]*
 
 		}
 
-		var requests []Request[T]
+		var requests []Request
 
 		for _, task := range tasks {
 			task := task
-			requests = append(requests, Request[T]{task, uuid.New(), &m})
+			requests = append(requests, Request{*task, uuid.New(), &m})
 		}
 
 		return requests, nil
 	}
 
-	pending := make(chan Request[T], config.MAX_JOBS)
+	pending := make(chan Request, config.MAX_JOBS)
 
-	done := make(chan Request[T], config.MAX_JOBS)
+	done := make(chan Request, config.MAX_JOBS)
 
 	current := &struct {
-		req *Request[T]
+		req *Request
 		mut sync.RWMutex
 	}{}
 
-	return Queue[T]{requestGenerator, current, pending, done, nil, ctx}
+	return Queue{requestGenerator, current, pending, done, nil, ctx}
 
 }
 
-func (q Queue[T]) Push(msg models.Message) error {
+func (q Queue) Push(msg models.Message) error {
 	tasks, err := q.requestFactory(msg)
 
 	if err != nil {
@@ -94,26 +89,26 @@ func (q Queue[T]) Push(msg models.Message) error {
 	return nil
 }
 
-func (q Queue[T]) Pop() Request[T] {
+func (q Queue) Pop() Request {
 	return <-q.done
 }
 
-func (q Queue[T]) Len() int {
+func (q Queue) Len() int {
 	return len(q.pending)
 }
 
-func (q Queue[T]) IsWorking() bool {
+func (q Queue) IsWorking() bool {
 	q.current.mut.RLock()
 	defer q.current.mut.RUnlock()
 
 	return q.current.req != nil
 }
 
-func (q *Queue[T]) RegisterBot(b *bot.Bot) {
+func (q *Queue) RegisterBot(b *bot.Bot) {
 	q.bot = b
 }
 
-func (queue Queue[T]) Start() {
+func (queue Queue) Start() {
 
 	go func() {
 		for {
@@ -123,7 +118,7 @@ func (queue Queue[T]) Start() {
 			default:
 				req := queue.Pop()
 
-				_, err := req.task.Runner.Result()
+				_, err := req.task.Result()
 
 				if err != nil {
 					log.Printf("Error processing request %s: %v", req.Id(), err)
@@ -159,7 +154,7 @@ func (queue Queue[T]) Start() {
 						queue.current.mut.Unlock()
 					}()
 
-					req.Job().Launch()
+					req.task.Launch()
 					queue.done <- req
 				}()
 			}
