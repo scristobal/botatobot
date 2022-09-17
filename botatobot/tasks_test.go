@@ -1,4 +1,4 @@
-package jobs
+package botatobot
 
 import (
 	"testing"

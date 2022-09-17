@@ -3,54 +3,39 @@ package main
 import (
 	"context"
 	"log"
+	"math/rand"
 	"os"
 	"os/signal"
-	"scristobal/botatobot/cfg"
-	"scristobal/botatobot/handlers"
-	"scristobal/botatobot/queue"
+	"scristobal/botatobot/botatobot"
+	"scristobal/botatobot/config"
+	"time"
 
 	"github.com/go-telegram/bot"
 )
 
 func main() {
-	log.Println("Loading configuration...")
 
-	err := cfg.FromEnv()
+	rand.Seed(time.Now().UnixNano())
 
-	if err != nil {
+	if err := config.FromEnv(); err != nil {
 		log.Fatalf("Error loading configuration: %v", err)
 	}
 
-	log.Println("Creating OS context...")
+	queue := botatobot.NewQueue()
+	handler := botatobot.NewHandler(queue)
+
+	opts := []bot.Option{bot.WithDefaultHandler(handler)}
+	b := bot.New(config.BOT_TOKEN, opts...)
+
+	queue.RegisterBot(b)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
-	log.Println("Creating bot...")
+	go queue.Start(ctx)
+	go b.Start(ctx)
 
-	opts := []bot.Option{
-		bot.WithDefaultHandler(handlers.Update),
-	}
+	log.Println("Bot online, listening to messages...")
 
-	b := bot.New(cfg.BOT_TOKEN, opts...)
-
-	log.Println("Initializing job queue...")
-
-	queue.Init(ctx)
-
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			default:
-				job := queue.Pop()
-				handlers.Job(ctx, b, &job)
-			}
-		}
-	}()
-
-	log.Println("Starting bot...")
-
-	b.Start(ctx)
+	<-ctx.Done()
 }
