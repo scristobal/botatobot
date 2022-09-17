@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/url"
 	"path/filepath"
 
 	"github.com/go-telegram/bot"
@@ -37,9 +38,21 @@ func NewQueue() Queue {
 
 		var requests []Request
 
+		u, err := url.Parse(MODEL_URL)
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse model url: %s", err)
+		}
+
+		env := "remote"
+
+		if u.Hostname() == "127.0.0.1" {
+			env = "local"
+		}
+
 		for _, task := range tasks {
 			task := task
-			requests = append(requests, Request{*task, uuid.New(), &m, nil, nil, "remote"})
+			requests = append(requests, Request{*task, uuid.New(), &m, nil, nil, env})
 		}
 
 		return requests, nil
