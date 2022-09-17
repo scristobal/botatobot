@@ -67,11 +67,10 @@ func (q Queue) Push(msg models.Message) error {
 		return fmt.Errorf("failed to create tasks: %s", err)
 	}
 
-	if len(tasks) > MAX_JOBS {
-		return fmt.Errorf("too many jobs")
-	}
-
 	for _, task := range tasks {
+		if len(q.pending) >= MAX_JOBS {
+			return fmt.Errorf("too many jobs")
+		}
 		q.pending <- task
 	}
 
