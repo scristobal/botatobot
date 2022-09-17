@@ -92,9 +92,7 @@ func (q Queue) Start(ctx context.Context) {
 			select {
 			case <-(*q.ctx).Done():
 				return
-			default:
-				req := <-q.done
-
+			case req := <-q.done:
 				_, err := req.Result()
 
 				if err != nil {
@@ -164,7 +162,7 @@ func (q Queue) notifyBot(req Request) error {
 
 	_, err = q.bot.SendPhoto(*q.ctx, &bot.SendPhotoParams{
 		ChatID:  message.Chat.ID,
-		Caption: fmt.Sprint(req),
+		Caption: fmt.Sprint(&req.Task),
 		Photo: &models.InputFileUpload{
 			Data:     bytes.NewReader(res),
 			Filename: filepath.Base(fmt.Sprintf("%s.png", req.GetIdentifier())),

@@ -28,7 +28,7 @@ func (r Request) GetMessage() *models.Message {
 	return r.Msg
 }
 
-func (r Request) Launch() {
+func (r *Request) Launch() {
 	r.Output, r.Err = r.Task.Execute(r.Env)
 }
 
