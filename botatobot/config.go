@@ -47,7 +47,7 @@ func FromEnv() error {
 	TOKEN, ok = os.LookupEnv("TOKEN")
 
 	if !ok {
-		log.Println("TOKEN not found, calls to external APIS might fail")
+		log.Println("TOKEN not found, calls to external APIs might fail")
 	}
 
 	return nil
