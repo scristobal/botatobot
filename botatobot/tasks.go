@@ -340,10 +340,12 @@ func (t *Txt2img) runRemote() ([]byte, error) {
 
 	body, err := io.ReadAll(res.Body)
 
-	fmt.Println("------ 1st call results ------")
-	fmt.Println("req", req)
-	fmt.Println("res", res)
-	fmt.Println("body", string(body))
+	/*
+		fmt.Println("------ 1st call results ------")
+		fmt.Println("req", req)
+		fmt.Println("res", res)
+		fmt.Println("body", string(body))
+	*/
 
 	if err != nil {
 		return []byte{}, fmt.Errorf("can't read model response: %s", err)
@@ -385,10 +387,12 @@ func (t *Txt2img) runRemote() ([]byte, error) {
 
 	body, err = io.ReadAll(res.Body)
 
-	fmt.Println("------ 2nd call results ------")
-	fmt.Println("req", req)
-	fmt.Println("res", res)
-	fmt.Println("body", string(body))
+	/*
+		fmt.Println("------ 2nd call results ------")
+		fmt.Println("req", req)
+		fmt.Println("res", res)
+		fmt.Println("body", string(body))
+	*/
 
 	if err != nil {
 		return []byte{}, fmt.Errorf("can't read model response: %s", err)
@@ -431,10 +435,12 @@ func (t *Txt2img) runRemote() ([]byte, error) {
 
 	body, err = io.ReadAll(res.Body)
 
-	//fmt.Println("------ 3rd call results ------")
-	//fmt.Println("req", req)
-	//fmt.Println("res", res)
-	//fmt.Println("body", string(body))
+	/*
+		fmt.Println("------ 3rd call results ------")
+		fmt.Println("req", req)
+		fmt.Println("res", res)
+		fmt.Println("body", string(body))
+	*/
 
 	if err != nil {
 		return []byte{}, fmt.Errorf("can't read model response: %s", err)

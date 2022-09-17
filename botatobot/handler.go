@@ -91,7 +91,7 @@ func generateHandler(ctx context.Context, b *bot.Bot, message models.Message, q 
 	if err != nil {
 		b.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID:           message.Chat.ID,
-			Text:             fmt.Sprintf("Sorry, but your request was rejected 😬\n\n %s", err),
+			Text:             fmt.Sprintf("Sorry, but your request was rejected 😬 %s", err),
 			ReplyToMessageID: message.ID,
 		})
 		log.Printf("User %s requested %s but rejected", message.From.Username, err)
