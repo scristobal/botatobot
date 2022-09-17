@@ -125,7 +125,6 @@ func (q Queue) Start(ctx context.Context) {
 			case <-(*q.ctx).Done():
 				return
 			case req := <-q.pending:
-
 				q.current = &req
 
 				req.Launch()

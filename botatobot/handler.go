@@ -77,7 +77,6 @@ func getMessage(update *models.Update) (*models.Message, error) {
 
 func statusHandler(ctx context.Context, b *bot.Bot, message models.Message, q queue) {
 	isWorking := q.IsWorking()
-
 	numJobs := q.Len()
 
 	if !isWorking && numJobs == 0 {
@@ -111,13 +110,15 @@ func generateHandler(ctx context.Context, b *bot.Bot, message models.Message, q 
 
 	err := q.Push(message)
 
+	log.Printf("Requested %s\n", message.Text)
+
 	if err != nil {
 		b.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID:           message.Chat.ID,
 			Text:             fmt.Sprintf("Sorry, but your request was rejected 😬 %s", err),
 			ReplyToMessageID: message.ID,
 		})
-		log.Printf("User %s requested %s but rejected", message.From.Username, err)
+		log.Printf("Requested %s but rejected by %s\n", message.Text, err)
 		return
 	}
 
