@@ -29,14 +29,14 @@ func NewHandler(q queue) Handler {
 			}
 		}()
 
-		message := update.Message
+		message, err := getMessage(update)
 
-		if message == nil {
-			log.Printf("Got an update without a message. Skipping. \n")
+		if err != nil {
+			log.Printf("Failed to get message: %s", err)
 			return
 		}
 
-		text := update.Message.Text
+		text := message.Text
 
 		if strings.HasPrefix(text, string(Generate)) {
 			generateHandler(ctx, b, *message, q)
@@ -50,6 +50,29 @@ func NewHandler(q queue) Handler {
 			statusHandler(ctx, b, *message, q)
 		}
 	}
+}
+
+func getMessage(update *models.Update) (*models.Message, error) {
+
+	if update == nil {
+		return &models.Message{}, fmt.Errorf("empty update")
+	}
+
+	message := update.Message
+
+	if message != nil {
+
+		return message, nil
+	}
+
+	edited := update.EditedMessage
+
+	if edited != nil {
+
+		return edited, nil
+	}
+
+	return &models.Message{}, fmt.Errorf("no message found in update")
 }
 
 func statusHandler(ctx context.Context, b *bot.Bot, message models.Message, q queue) {
