@@ -17,38 +17,25 @@ func main() {
 
 	rand.Seed(time.Now().UnixNano())
 
-	log.Println("Loading configuration...")
-
-	err := config.FromEnv()
-
-	if err != nil {
+	if err := config.FromEnv(); err != nil {
 		log.Fatalf("Error loading configuration: %v", err)
 	}
 
-	log.Println("Creating OS context...")
-
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
-	defer cancel()
-
-	log.Println("Initializing work queue...")
-
-	queue := botatobot.NewQueue(ctx)
-
-	log.Println("Starting bot...")
-
+	queue := botatobot.NewQueue()
 	handler := botatobot.NewHandler(queue)
 
 	opts := []bot.Option{bot.WithDefaultHandler(handler)}
-
 	b := bot.New(config.BOT_TOKEN, opts...)
 
 	queue.RegisterBot(b)
 
-	log.Println("listening to job queue...")
-	go queue.Start()
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer cancel()
 
-	log.Println("listening to messages...")
+	go queue.Start(ctx)
 	go b.Start(ctx)
+
+	log.Println("Bot online, listening to messages...")
 
 	<-ctx.Done()
 }

@@ -19,10 +19,10 @@ type Queue struct {
 	pending        chan Request
 	done           chan Request
 	bot            *bot.Bot
-	ctx            context.Context
+	ctx            *context.Context
 }
 
-func NewQueue(ctx context.Context) Queue {
+func NewQueue() Queue {
 	requestGenerator := func(m models.Message) ([]Request, error) {
 
 		requestFactory := func(m models.Message) ([]*Txt2img, error) {
@@ -50,8 +50,7 @@ func NewQueue(ctx context.Context) Queue {
 
 	done := make(chan Request, config.MAX_JOBS)
 
-	return Queue{requestGenerator, nil, pending, done, nil, ctx}
-
+	return Queue{requestGenerator, nil, pending, done, nil, nil}
 }
 
 func (q Queue) Push(msg models.Message) error {
@@ -84,11 +83,14 @@ func (q *Queue) RegisterBot(b *bot.Bot) {
 	q.bot = b
 }
 
-func (q Queue) Start() {
+func (q Queue) Start(ctx context.Context) {
+
+	q.ctx = &ctx
+
 	go func() {
 		for {
 			select {
-			case <-q.ctx.Done():
+			case <-(*q.ctx).Done():
 				return
 			default:
 				req := <-q.done
@@ -115,7 +117,7 @@ func (q Queue) Start() {
 	go func() {
 		for {
 			select {
-			case <-q.ctx.Done():
+			case <-(*q.ctx).Done():
 				return
 			case req := <-q.pending:
 				func() {
@@ -132,17 +134,26 @@ func (q Queue) Start() {
 			}
 		}
 	}()
-	<-q.ctx.Done()
+	<-(*q.ctx).Done()
 }
 
 func (q Queue) notifyBot(req Request) error {
+
+	if q.bot == nil {
+		return fmt.Errorf("bot not registered, use q.RegisterBot(b)")
+	}
+
+	if q.ctx == nil {
+		return fmt.Errorf("context not registered, start the queue with q.Start(ctx)")
+	}
+
 	message := req.GetMessage()
 
 	res, err := req.Result()
 
 	if err != nil {
 
-		_, err := q.bot.SendMessage(q.ctx, &bot.SendMessageParams{
+		_, err := q.bot.SendMessage(*q.ctx, &bot.SendMessageParams{
 			ChatID:           message.Chat.ID,
 			Text:             fmt.Sprintf("Sorry, but something went wrong 😭 %s", err),
 			ReplyToMessageID: message.ID,
@@ -151,7 +162,7 @@ func (q Queue) notifyBot(req Request) error {
 		return err
 	}
 
-	_, err = q.bot.SendPhoto(q.ctx, &bot.SendPhotoParams{
+	_, err = q.bot.SendPhoto(*q.ctx, &bot.SendPhotoParams{
 		ChatID:  message.Chat.ID,
 		Caption: fmt.Sprint(req),
 		Photo: &models.InputFileUpload{
