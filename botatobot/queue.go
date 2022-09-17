@@ -25,12 +25,7 @@ type Queue struct {
 func NewQueue() Queue {
 	requestGenerator := func(m models.Message) ([]Request, error) {
 
-		requestFactory := func(m models.Message) ([]*Txt2img, error) {
-			return Txt2imgFromString(m.Text)
-
-		}
-
-		tasks, err := requestFactory(m)
+		tasks, err := Txt2imgFromString(m.Text)
 
 		if err != nil {
 			return nil, fmt.Errorf("failed to create request: %s", err)
@@ -130,17 +125,13 @@ func (q Queue) Start(ctx context.Context) {
 			case <-(*q.ctx).Done():
 				return
 			case req := <-q.pending:
-				func() {
 
-					q.current = &req
+				q.current = &req
 
-					defer func() {
-						q.current = nil
-					}()
+				req.Launch()
+				q.done <- req
 
-					req.Launch()
-					q.done <- req
-				}()
+				q.current = nil
 			}
 		}
 	}()
