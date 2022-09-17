@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/signal"
 	"scristobal/botatobot/botatobot"
-	"scristobal/botatobot/config"
 	"time"
 
 	"github.com/go-telegram/bot"
@@ -17,7 +16,7 @@ func main() {
 
 	rand.Seed(time.Now().UnixNano())
 
-	if err := config.FromEnv(); err != nil {
+	if err := botatobot.FromEnv(); err != nil {
 		log.Fatalf("Error loading configuration: %v", err)
 	}
 
@@ -25,7 +24,7 @@ func main() {
 	handler := botatobot.NewHandler(queue)
 
 	opts := []bot.Option{bot.WithDefaultHandler(handler)}
-	b := bot.New(config.BOT_TOKEN, opts...)
+	b := bot.New(botatobot.BOT_TOKEN, opts...)
 
 	queue.RegisterBot(b)
 

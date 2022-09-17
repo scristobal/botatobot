@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"scristobal/botatobot/config"
 
 	"github.com/go-telegram/bot/models"
 	"github.com/google/uuid"
@@ -42,7 +41,7 @@ func (r Request) String() string {
 
 func (r Request) SaveToDisk() error {
 
-	err := os.MkdirAll(config.OUTPUT_PATH, 0755)
+	err := os.MkdirAll(OUTPUT_PATH, 0755)
 
 	if err != nil {
 		return fmt.Errorf("failed to create output directory: %s", err)
@@ -52,7 +51,7 @@ func (r Request) SaveToDisk() error {
 		return fmt.Errorf("failed to get result: %s", err)
 	}
 
-	imgFilePath := filepath.Join(config.OUTPUT_PATH, fmt.Sprintf("%s.png", r.Id))
+	imgFilePath := filepath.Join(OUTPUT_PATH, fmt.Sprintf("%s.png", r.Id))
 
 	err = os.WriteFile(imgFilePath, r.Output, 0644)
 
@@ -66,7 +65,7 @@ func (r Request) SaveToDisk() error {
 		return fmt.Errorf("failed to serialize job parameters: %s", err)
 	}
 
-	jsonFilePath := filepath.Join(config.OUTPUT_PATH, fmt.Sprintf("%s.json", r.Id))
+	jsonFilePath := filepath.Join(OUTPUT_PATH, fmt.Sprintf("%s.json", r.Id))
 
 	err = os.WriteFile(jsonFilePath, content, 0644)
 

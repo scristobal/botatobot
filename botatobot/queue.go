@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"path/filepath"
-	"scristobal/botatobot/config"
 
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
@@ -46,9 +45,9 @@ func NewQueue() Queue {
 		return requests, nil
 	}
 
-	pending := make(chan Request, config.MAX_JOBS)
+	pending := make(chan Request, MAX_JOBS)
 
-	done := make(chan Request, config.MAX_JOBS)
+	done := make(chan Request, MAX_JOBS)
 
 	return Queue{requestGenerator, nil, pending, done, nil, nil}
 }
@@ -60,7 +59,7 @@ func (q Queue) Push(msg models.Message) error {
 		return fmt.Errorf("failed to create tasks: %s", err)
 	}
 
-	if len(tasks) > config.MAX_JOBS {
+	if len(tasks) > MAX_JOBS {
 		return fmt.Errorf("too many jobs")
 	}
 
