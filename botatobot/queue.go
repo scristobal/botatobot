@@ -23,27 +23,24 @@ type Queue struct {
 }
 
 func NewQueue(ctx context.Context) Queue {
-
 	requestGenerator := func(m models.Message) ([]Request, error) {
 
 		requestFactory := func(m models.Message) ([]*Txt2img, error) {
-			return FromString(m.Text)
+			return Txt2imgFromString(m.Text)
 
 		}
 
 		tasks, err := requestFactory(m)
 
 		if err != nil {
-
 			return nil, fmt.Errorf("failed to create request: %s", err)
-
 		}
 
 		var requests []Request
 
 		for _, task := range tasks {
 			task := task
-			requests = append(requests, Request{*task, uuid.New(), &m})
+			requests = append(requests, Request{*task, uuid.New(), &m, nil, nil, "remote"})
 		}
 
 		return requests, nil
@@ -96,21 +93,21 @@ func (q Queue) Start() {
 			default:
 				req := <-q.done
 
-				_, err := req.task.Result()
+				_, err := req.Result()
 
 				if err != nil {
-					log.Printf("Error processing request %s: %v", req.Id(), err)
+					log.Printf("Error processing request %s: %v", req.GetIdentifier(), err)
 				}
 
-				err = q.send(req)
+				err = q.notifyBot(req)
 
 				if err != nil {
-					log.Printf("Error notifying user of %s: %v", req.Id(), err)
+					log.Printf("Error notifying user of %s: %v", req.GetIdentifier(), err)
 				}
 
 				err = req.SaveToDisk()
 				if err != nil {
-					log.Printf("Error saving request %s to disk: %v", req.Id(), err)
+					log.Printf("Error saving request %s to disk: %v", req.GetIdentifier(), err)
 				}
 			}
 		}
@@ -129,7 +126,7 @@ func (q Queue) Start() {
 						q.current = nil
 					}()
 
-					req.task.Launch()
+					req.Launch()
 					q.done <- req
 				}()
 			}
@@ -138,8 +135,8 @@ func (q Queue) Start() {
 	<-q.ctx.Done()
 }
 
-func (q Queue) send(req Request) error {
-	message := req.Msg()
+func (q Queue) notifyBot(req Request) error {
+	message := req.GetMessage()
 
 	res, err := req.Result()
 
@@ -159,7 +156,7 @@ func (q Queue) send(req Request) error {
 		Caption: fmt.Sprint(req),
 		Photo: &models.InputFileUpload{
 			Data:     bytes.NewReader(res),
-			Filename: filepath.Base(fmt.Sprintf("%s.png", req.Id())),
+			Filename: filepath.Base(fmt.Sprintf("%s.png", req.GetIdentifier())),
 		},
 		DisableNotification: true,
 	})

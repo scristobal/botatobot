@@ -12,37 +12,32 @@ import (
 )
 
 type Request struct {
-	task Txt2img
-	id   uuid.UUID
-	msg  *models.Message
+	Task   Txt2img         `json:"task"`
+	Id     uuid.UUID       `json:"id"`
+	Msg    *models.Message `json:"msg"`
+	Output []byte          `json:"-"`
+	Err    error           `json:"error,omitempty"`
+	Env    string          `json:"env"`
 }
 
-func (r Request) Id() uuid.UUID {
-	return r.id
+func (r Request) GetIdentifier() uuid.UUID {
+	return r.Id
 }
 
-func (r Request) Msg() *models.Message {
-	return r.msg
+func (r Request) GetMessage() *models.Message {
+	return r.Msg
+}
+
+func (r Request) Launch() {
+	r.Output, r.Err = r.Task.Execute(r.Env)
 }
 
 func (r Request) Result() ([]byte, error) {
-	return r.task.Result()
+	return r.Output, r.Err
 }
 
 func (r Request) String() string {
-	return r.task.Describe()
-}
-
-func (r Request) MarshalJSON() ([]byte, error) {
-	return json.Marshal(struct {
-		Id     uuid.UUID       `json:"id"`
-		Msg    *models.Message `json:"message"`
-		Runner Txt2img         `json:"task"`
-	}{
-		r.id,
-		r.msg,
-		r.task,
-	})
+	return fmt.Sprintf("request %s with parameters: %s, running %s", r.Id, &r.Task, r.Env)
 }
 
 func (r Request) SaveToDisk() error {
@@ -53,15 +48,13 @@ func (r Request) SaveToDisk() error {
 		return fmt.Errorf("failed to create output directory: %s", err)
 	}
 
-	img, err := r.task.Result()
-
-	if err != nil {
+	if r.Err != nil {
 		return fmt.Errorf("failed to get result: %s", err)
 	}
 
-	imgFilePath := filepath.Join(config.OUTPUT_PATH, fmt.Sprintf("%s.png", r.Id()))
+	imgFilePath := filepath.Join(config.OUTPUT_PATH, fmt.Sprintf("%s.png", r.Id))
 
-	err = os.WriteFile(imgFilePath, img, 0644)
+	err = os.WriteFile(imgFilePath, r.Output, 0644)
 
 	if err != nil {
 		return fmt.Errorf("can't write image to disc: %s", err)
@@ -73,7 +66,7 @@ func (r Request) SaveToDisk() error {
 		return fmt.Errorf("failed to serialize job parameters: %s", err)
 	}
 
-	jsonFilePath := filepath.Join(config.OUTPUT_PATH, fmt.Sprintf("%s.json", r.Id()))
+	jsonFilePath := filepath.Join(config.OUTPUT_PATH, fmt.Sprintf("%s.json", r.Id))
 
 	err = os.WriteFile(jsonFilePath, content, 0644)
 

@@ -21,14 +21,6 @@ type Txt2img struct {
 	Seed                int     `json:"seed,omitempty"`
 	Num_inference_steps int     `json:"num_inference_steps,omitempty"`
 	Guidance_scale      float32 `json:"guidance_scale,omitempty"`
-	Output              []byte  `json:"-"` // not serialized
-	Error               error   `json:"error,omitempty"`
-	Env                 string
-}
-
-type apiResponse struct {
-	Status string   `json:"status"`
-	Output []string `json:"output"` // (base64) data URLs
 }
 
 func validate(prompt string) bool {
@@ -150,7 +142,6 @@ func buildConfig(prompt string, params map[string]string) (Txt2img, error) {
 		Prompt:              prompt,
 		Num_inference_steps: 50,
 		Guidance_scale:      7.5,
-		Env:                 "remote",
 	}
 
 	for key, value := range params {
@@ -194,7 +185,7 @@ func buildConfig(prompt string, params map[string]string) (Txt2img, error) {
 
 }
 
-func FromString(s string) ([]*Txt2img, error) {
+func Txt2imgFromString(s string) ([]*Txt2img, error) {
 
 	prompt, err := getPrompt(s)
 
@@ -232,7 +223,6 @@ func FromString(s string) ([]*Txt2img, error) {
 			Prompt:              params.Prompt,
 			Num_inference_steps: params.Num_inference_steps,
 			Guidance_scale:      params.Guidance_scale,
-			Env:                 params.Env,
 		}
 
 		jobs[i] = &job
@@ -242,8 +232,30 @@ func FromString(s string) ([]*Txt2img, error) {
 	return jobs, nil
 }
 
-func localRunner(j *Txt2img) ([]byte, error) {
-	input, err := json.Marshal(j)
+func (t *Txt2img) String() string {
+	res := fmt.Sprintf("%s &seed_%d &steps_%d &guidance_%1.f", t.Prompt, t.Seed, t.Num_inference_steps, t.Guidance_scale)
+
+	res = strings.TrimSpace(res)
+
+	return res
+}
+
+func (t *Txt2img) Execute(env string) ([]byte, error) {
+
+	if env != "local" && env != "remote" {
+		return nil, fmt.Errorf("invalid environment, should be local or remote")
+	}
+
+	if env == "local" {
+		return t.runLocal()
+	}
+
+	return t.runRemote()
+
+}
+
+func (t *Txt2img) runLocal() ([]byte, error) {
+	input, err := json.Marshal(t)
 
 	if err != nil {
 		return []byte{}, fmt.Errorf("fail to serialize job parameters: %v", err)
@@ -263,6 +275,11 @@ func localRunner(j *Txt2img) ([]byte, error) {
 	if err != nil {
 		return []byte{}, fmt.Errorf("can't read model response: %s", err)
 
+	}
+
+	type apiResponse struct {
+		Status string   `json:"status"`
+		Output []string `json:"output"` // (base64) data URLs
 	}
 
 	response := apiResponse{}
@@ -290,8 +307,8 @@ func localRunner(j *Txt2img) ([]byte, error) {
 
 }
 
-func remoteRunner(j *Txt2img) ([]byte, error) {
-	input, err := json.Marshal(j)
+func (t *Txt2img) runRemote() ([]byte, error) {
+	input, err := json.Marshal(t)
 
 	if err != nil {
 		return []byte{}, fmt.Errorf("fail to serialize job parameters: %v", err)
@@ -424,25 +441,4 @@ func remoteRunner(j *Txt2img) ([]byte, error) {
 	}
 
 	return body, nil
-}
-
-func (j *Txt2img) Launch() {
-	if j.Env == "remote" {
-		j.Output, j.Error = remoteRunner(j)
-	} else {
-		j.Output, j.Error = localRunner(j)
-	}
-}
-
-func (j *Txt2img) Result() ([]byte, error) {
-	return j.Output, j.Error
-}
-
-func (j *Txt2img) Describe() string {
-
-	res := fmt.Sprintf("%s &seed_%d &steps_%d &guidance_%1.f", j.Prompt, j.Seed, j.Num_inference_steps, j.Guidance_scale)
-
-	res = strings.TrimSpace(res)
-
-	return res
 }
