@@ -14,12 +14,12 @@ import (
 )
 
 type Queue struct {
-	requestFactory func(models.Message) ([]Request, error)
-	current        *Request
-	pending        chan Request
-	done           chan Request
-	bot            *bot.Bot
-	ctx            *context.Context
+	factory func(models.Message) ([]Request, error)
+	current *Request
+	pending chan Request
+	done    chan Request
+	bot     *bot.Bot
+	ctx     *context.Context
 }
 
 func NewQueue() Queue {
@@ -53,15 +53,15 @@ func NewQueue() Queue {
 		return requests, nil
 	}
 
-	pending := make(chan Request, MAX_JOBS)
-
-	done := make(chan Request, MAX_JOBS)
-
-	return Queue{requestGenerator, nil, pending, done, nil, nil}
+	return Queue{
+		factory: requestGenerator,
+		pending: make(chan Request, MAX_JOBS),
+		done:    make(chan Request, MAX_JOBS),
+	}
 }
 
 func (q Queue) Push(msg models.Message) error {
-	tasks, err := q.requestFactory(msg)
+	tasks, err := q.factory(msg)
 
 	if err != nil {
 		return fmt.Errorf("failed to create tasks: %s", err)
