@@ -1,4 +1,4 @@
-package botatobot
+package config
 
 import (
 	"fmt"

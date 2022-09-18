@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/url"
 	"path/filepath"
+	"scristobal/botatobot/config"
 
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
@@ -33,7 +34,7 @@ func NewQueue() Queue {
 
 		var requests []Request
 
-		u, err := url.Parse(MODEL_URL)
+		u, err := url.Parse(config.MODEL_URL)
 
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse model url: %s", err)
@@ -55,8 +56,8 @@ func NewQueue() Queue {
 
 	return Queue{
 		factory: requestGenerator,
-		pending: make(chan Request, MAX_JOBS),
-		done:    make(chan Request, MAX_JOBS),
+		pending: make(chan Request, config.MAX_JOBS),
+		done:    make(chan Request, config.MAX_JOBS),
 	}
 }
 
@@ -68,7 +69,7 @@ func (q *Queue) Push(msg models.Message) error {
 	}
 
 	for _, task := range tasks {
-		if len(q.pending) >= MAX_JOBS {
+	if len(q.pending) >= config.MAX_JOBS {
 			return fmt.Errorf("too many jobs")
 		}
 		q.pending <- task
