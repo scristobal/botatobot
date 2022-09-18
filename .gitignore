@@ -24,3 +24,6 @@ logs/
 # editors
 .vscode/
 __debug_bin
+
+#builds
+build/

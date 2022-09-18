@@ -39,7 +39,7 @@ OUTPUT_PATH=/home/user/pictures
 
 The variable `OUTPUT_PATH` is optional, and indicates the path where the generated images will be saved.
 
-Build with`go build -o botatobot cmd/botatobot/main.go` and then run `./botatobot`
+Build with`make build` and then run `./build/botatobot`
 
 ## Usage
 
