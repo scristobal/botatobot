@@ -21,7 +21,7 @@ func main() {
 	}
 
 	queue := botatobot.NewQueue()
-	handler := botatobot.NewHandler(queue)
+	handler := botatobot.NewHandler(&queue)
 
 	opts := []bot.Option{bot.WithDefaultHandler(handler)}
 	b := bot.New(botatobot.BOT_TOKEN, opts...)

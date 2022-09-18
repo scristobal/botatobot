@@ -60,7 +60,7 @@ func NewQueue() Queue {
 	}
 }
 
-func (q Queue) Push(msg models.Message) error {
+func (q *Queue) Push(msg models.Message) error {
 	tasks, err := q.factory(msg)
 
 	if err != nil {
@@ -77,11 +77,11 @@ func (q Queue) Push(msg models.Message) error {
 	return nil
 }
 
-func (q Queue) Len() int {
+func (q *Queue) Len() int {
 	return len(q.pending)
 }
 
-func (q Queue) IsWorking() bool {
+func (q *Queue) IsWorking() bool {
 	return q.current != nil
 }
 
@@ -89,7 +89,7 @@ func (q *Queue) RegisterBot(b *bot.Bot) {
 	q.bot = b
 }
 
-func (q Queue) Start(ctx context.Context) {
+func (q *Queue) Start(ctx context.Context) {
 
 	q.ctx = &ctx
 
@@ -136,7 +136,7 @@ func (q Queue) Start(ctx context.Context) {
 	<-(*q.ctx).Done()
 }
 
-func (q Queue) notifyBot(req Request) error {
+func (q *Queue) notifyBot(req Request) error {
 
 	if q.bot == nil {
 		return fmt.Errorf("bot not registered, use q.RegisterBot(b)")
