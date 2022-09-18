@@ -61,15 +61,15 @@ func NewQueue() Queue {
 	}
 }
 
-func (q *Queue) Push(msg models.Message) error {
-	tasks, err := q.factory(msg)
+func (q *Queue) Push(msg *models.Message) error {
+	tasks, err := q.factory(*msg)
 
 	if err != nil {
 		return fmt.Errorf("failed to create tasks: %s", err)
 	}
 
 	for _, task := range tasks {
-	if len(q.pending) >= config.MAX_JOBS {
+		if len(q.pending) >= config.MAX_JOBS {
 			return fmt.Errorf("too many jobs")
 		}
 		q.pending <- task

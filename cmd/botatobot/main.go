@@ -22,10 +22,12 @@ func main() {
 	}
 
 	queue := botatobot.NewQueue()
-	handler := botatobot.NewHandler(&queue)
 
-	opts := []bot.Option{bot.WithDefaultHandler(handler)}
-	b := bot.New(config.BOT_TOKEN, opts...)
+	b := bot.New(config.BOT_TOKEN)
+
+	b.RegisterHandler(bot.HandlerTypeMessageText, string(botatobot.Generate), bot.MatchTypePrefix, botatobot.GenerateHandler(&queue))
+	b.RegisterHandler(bot.HandlerTypeMessageText, string(botatobot.Status), bot.MatchTypePrefix, botatobot.StatusHandler(&queue))
+	b.RegisterHandler(bot.HandlerTypeMessageText, string(botatobot.Help), bot.MatchTypePrefix, botatobot.HelpHandler())
 
 	queue.RegisterBot(b)
 
