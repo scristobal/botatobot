@@ -20,11 +20,11 @@ type Request struct {
 	Env    string          `json:"env"`
 }
 
-func (r Request) GetIdentifier() uuid.UUID {
+func (r *Request) GetIdentifier() uuid.UUID {
 	return r.Id
 }
 
-func (r Request) GetMessage() *models.Message {
+func (r *Request) GetMessage() *models.Message {
 	return r.Msg
 }
 
@@ -32,15 +32,15 @@ func (r *Request) Launch() {
 	r.Output, r.Err = r.Task.Execute(r.Env)
 }
 
-func (r Request) Result() ([]byte, error) {
+func (r *Request) Result() ([]byte, error) {
 	return r.Output, r.Err
 }
 
-func (r Request) String() string {
+func (r *Request) String() string {
 	return fmt.Sprintf("request %s with parameters: %s, running %s", r.Id, &r.Task, r.Env)
 }
 
-func (r Request) SaveToDisk() error {
+func (r *Request) SaveToDisk() error {
 
 	if config.OUTPUT_PATH == "" {
 		return fmt.Errorf("no output path defined, skipping")
