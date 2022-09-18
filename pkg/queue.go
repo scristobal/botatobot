@@ -48,7 +48,7 @@ func NewQueue() Queue {
 
 		for _, task := range tasks {
 			task := task
-			requests = append(requests, Request{*task, uuid.New(), &m, nil, nil, env})
+			requests = append(requests, Request{Task: *task, Id: uuid.New(), Msg: &m, Env: env})
 		}
 
 		return requests, nil

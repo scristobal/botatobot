@@ -9,8 +9,6 @@ import (
 	"github.com/go-telegram/bot/models"
 )
 
-type Handler = func(context.Context, *bot.Bot, *models.Update)
-
 type queue interface {
 	Push(item *models.Message) error
 	Len() int
