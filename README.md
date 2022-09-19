@@ -45,9 +45,9 @@ MODEL_URL=http://127.0.0.1:5001/predictions
 OUTPUT_PATH=/home/user/pictures
 ```
 
-#### Build and run
-
 The variable `OUTPUT_PATH` is optional, and indicates the path where the generated images will be saved.
+
+#### Build and run
 
 Build with`make build` and then run `./build/botatobot`
 
