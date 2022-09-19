@@ -29,10 +29,10 @@ func main() {
 	b.RegisterHandler(bot.HandlerTypeMessageText, string(botatobot.Status), bot.MatchTypePrefix, botatobot.StatusHandler(&queue))
 	b.RegisterHandler(bot.HandlerTypeMessageText, string(botatobot.Help), bot.MatchTypePrefix, botatobot.HelpHandler())
 
-	queue.RegisterBot(b)
-
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
+
+	queue.SetCallback(botatobot.SendRequest(ctx, b))
 
 	go queue.Start(ctx)
 	go b.Start(ctx)

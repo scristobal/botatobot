@@ -1,26 +1,23 @@
 package botatobot
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"log"
 	"net/url"
-	"path/filepath"
 	"scristobal/botatobot/config"
 
-	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 	"github.com/google/uuid"
 )
 
 type Queue struct {
-	factory func(models.Message) ([]Request, error)
-	current *Request
-	pending chan Request
-	done    chan Request
-	bot     *bot.Bot
-	ctx     *context.Context
+	factory  func(models.Message) ([]Request, error)
+	current  *Request
+	pending  chan Request
+	done     chan Request
+	callback *func(Request) error
+	ctx      *context.Context
 }
 
 func NewQueue() Queue {
@@ -86,10 +83,6 @@ func (q *Queue) IsWorking() bool {
 	return q.current != nil
 }
 
-func (q *Queue) RegisterBot(b *bot.Bot) {
-	q.bot = b
-}
-
 func (q *Queue) Start(ctx context.Context) {
 
 	q.ctx = &ctx
@@ -106,13 +99,16 @@ func (q *Queue) Start(ctx context.Context) {
 					log.Printf("Error processing request %s: %v", req.GetIdentifier(), err)
 				}
 
-				err = q.notifyBot(req)
+				if q.callback != nil {
+					err = (*q.callback)(req)
 
-				if err != nil {
-					log.Printf("Error notifying user of %s: %v", req.GetIdentifier(), err)
+					if err != nil {
+						log.Printf("Error running callback of  %s: %v", req.GetIdentifier(), err)
+					}
 				}
 
 				err = req.SaveToDisk()
+
 				if err != nil {
 					log.Printf("Error saving request %s to disk: %v", req.GetIdentifier(), err)
 				}
@@ -137,40 +133,6 @@ func (q *Queue) Start(ctx context.Context) {
 	<-(*q.ctx).Done()
 }
 
-func (q *Queue) notifyBot(req Request) error {
-
-	if q.bot == nil {
-		return fmt.Errorf("bot not registered, use q.RegisterBot(b)")
-	}
-
-	if q.ctx == nil {
-		return fmt.Errorf("context not registered, start the queue with q.Start(ctx)")
-	}
-
-	message := req.GetMessage()
-
-	res, err := req.Result()
-
-	if err != nil {
-
-		_, err := q.bot.SendMessage(*q.ctx, &bot.SendMessageParams{
-			ChatID:           message.Chat.ID,
-			Text:             fmt.Sprintf("Sorry, but something went wrong 😭 %s", err),
-			ReplyToMessageID: message.ID,
-		})
-
-		return err
-	}
-
-	_, err = q.bot.SendPhoto(*q.ctx, &bot.SendPhotoParams{
-		ChatID:  message.Chat.ID,
-		Caption: fmt.Sprint(&req.Task),
-		Photo: &models.InputFileUpload{
-			Data:     bytes.NewReader(res),
-			Filename: filepath.Base(fmt.Sprintf("%s.png", req.GetIdentifier())),
-		},
-		DisableNotification: true,
-	})
-
-	return err
+func (q *Queue) SetCallback(f func(Request) error) {
+	q.callback = &f
 }
