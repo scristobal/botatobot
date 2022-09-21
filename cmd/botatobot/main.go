@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"math/rand"
+	"net/http"
 	"os"
 	"os/signal"
 	"scristobal/botatobot/config"
@@ -38,6 +39,11 @@ func main() {
 	go b.Start(ctx)
 
 	log.Println("Bot online, listening to messages...")
+
+	go botatobot.Http(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	})
 
 	<-ctx.Done()
 }
