@@ -41,7 +41,7 @@ func FromEnv() error {
 	OUTPUT_PATH, ok = os.LookupEnv("OUTPUT_PATH")
 
 	if !ok {
-		return fmt.Errorf("OUTPUT_PATH not found, files might not be saved locally")
+		log.Println("OUTPUT_PATH not found, files will not be saved locally")
 	}
 
 	TOKEN, ok = os.LookupEnv("TOKEN")
