@@ -1,4 +1,4 @@
-package botatobot
+package server
 
 import (
 	"net/http"

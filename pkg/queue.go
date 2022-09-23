@@ -16,7 +16,7 @@ type Queue struct {
 	current  *Request
 	pending  chan Request
 	done     chan Request
-	callback *func(Request) error
+	callback func(outcome) error
 	ctx      *context.Context
 }
 
@@ -100,7 +100,7 @@ func (q *Queue) Start(ctx context.Context) {
 				}
 
 				if q.callback != nil {
-					err = (*q.callback)(req)
+					err = q.callback(&req)
 
 					if err != nil {
 						log.Printf("Error running callback of  %s: %v", req.GetIdentifier(), err)
@@ -133,6 +133,6 @@ func (q *Queue) Start(ctx context.Context) {
 	<-(*q.ctx).Done()
 }
 
-func (q *Queue) SetCallback(f func(Request) error) {
-	q.callback = &f
+func (q *Queue) SetCallback(f func(outcome) error) {
+	q.callback = f
 }

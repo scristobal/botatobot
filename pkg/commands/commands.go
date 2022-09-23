@@ -1,4 +1,4 @@
-package botatobot
+package commands
 
 type Command string
 
