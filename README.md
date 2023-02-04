@@ -2,6 +2,8 @@
 
 Yet another Telegram bot, this one generates stable diffusion images on request.
 
+![ri10voizsol91](https://user-images.githubusercontent.com/9478529/216794269-bedc1fa7-3a46-41aa-8ecd-c31175544d44.jpg)
+
 ## Yes, but how?
 
 In a nutshell, Botatobot redirects users request for images to a server running a Stable Diffusion [Cog Container](https://github.com/replicate/cog)
