@@ -1,8 +1,5 @@
 # Botatobot 🥔
 
-> **Warning**
-> This is a legacy project, it has been replaced by [Craby](https://github.com/scristobal/craby)
-
 Yet another Telegram bot, this one generates stable diffusion images on request.
 
 ![ri10voizsol91](https://user-images.githubusercontent.com/9478529/216794269-bedc1fa7-3a46-41aa-8ecd-c31175544d44.jpg)
