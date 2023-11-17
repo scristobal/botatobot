@@ -14,9 +14,12 @@ Lastly, in order not to overflow the server it also implements a (bounded) worke
 
 ## Pre-requisites
 
-To run Stable Diffusion, you need [Docker](https://docs.docker.com/get-docker/) and the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html).
+To run Stable Diffusion, you have two options:
 
-To run the Telegram bot server you need [Go1.18+](https://go.dev/doc/install)
+- Locally, using [Docker](https://docs.docker.com/get-docker/) and the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html).
+- Remotely, using a service like [Replicate](https://www.replicate.com).
+
+To run the Telegram bot server you need [Go](https://go.dev/doc/install) and a [Telegram](https://www.telegram.com) account.
 
 ## Running locally 🏃‍♀️
 
@@ -48,6 +51,16 @@ OUTPUT_PATH=/home/user/pictures
 ```
 
 The variable `OUTPUT_PATH` is optional, and indicates the path where the generated images will be saved.
+
+Alternatively, you can use Replicate service by setting up `MODEL_URL` to Replicate's API. You will need a `REPLICATE_TOKEN`
+
+```text
+MODEL_URL=https://api.replicate.com/v1/predictions
+REPLICATE_TOKEN=1234567890abdfeghijklmnopqrstuvwxyz
+REPLICATE_VERSION=a9758cbfbd5f3c2094457d996681af52552901775aa2d6dd0b17fd15df959bef
+```
+
+You can find the available versions here <https://replicate.com/stability-ai/stable-diffusion/versions>
 
 #### Build and run
 

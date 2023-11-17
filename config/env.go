@@ -9,10 +9,11 @@ import (
 )
 
 var (
-	BOT_TOKEN   string
-	MODEL_URL   string
-	OUTPUT_PATH string
-	TOKEN       string
+	BOT_TOKEN         string
+	MODEL_URL         string
+	OUTPUT_PATH       string
+	REPLICATE_TOKEN   string
+	REPLICATE_VERSION string
 )
 
 const MAX_JOBS = 20
@@ -44,10 +45,16 @@ func FromEnv() error {
 		log.Println("OUTPUT_PATH not found, files will not be saved locally")
 	}
 
-	TOKEN, ok = os.LookupEnv("TOKEN")
+	REPLICATE_TOKEN, ok = os.LookupEnv("REPLICATE_TOKEN")
 
 	if !ok {
-		log.Println("TOKEN not found, calls to external APIs might fail")
+		log.Println("REPLICATE_TOKEN not found, don't forget to run your models locally")
+	}
+
+	REPLICATE_VERSION, ok = os.LookupEnv("REPLICATE_VERSION")
+
+	if !ok {
+		log.Println("REPLICATE_VERSION not found, don't forget to run your models locally")
 	}
 
 	return nil

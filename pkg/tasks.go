@@ -318,7 +318,9 @@ func (t *Txt2img) runRemote() ([]byte, error) {
 
 	// 1st request to launch job
 
-	reqBody := strings.NewReader(fmt.Sprintf(`{"version": "a9758cbfbd5f3c2094457d996681af52552901775aa2d6dd0b17fd15df959bef", "input": %s}`, input))
+	version := config.REPLICATE_VERSION
+
+	reqBody := strings.NewReader(fmt.Sprintf(`{"version": "%s", "input": %s}`, version, input))
 
 	req, err := http.NewRequest("POST", config.MODEL_URL, reqBody)
 
@@ -328,7 +330,7 @@ func (t *Txt2img) runRemote() ([]byte, error) {
 
 	req.Header.Add("Content-Type", "application/json")
 
-	req.Header.Add("Authorization", fmt.Sprintf("Token %s", config.TOKEN))
+	req.Header.Add("Authorization", fmt.Sprintf("Token %s", config.REPLICATE_TOKEN))
 
 	res, err := client.Do(req)
 
@@ -373,7 +375,7 @@ func (t *Txt2img) runRemote() ([]byte, error) {
 		return []byte{}, fmt.Errorf("fail to create request: %v", err)
 	}
 
-	req.Header.Add("Authorization", fmt.Sprintf("Token %s", config.TOKEN))
+	req.Header.Add("Authorization", fmt.Sprintf("Token %s", config.REPLICATE_TOKEN))
 
 	time.Sleep(5 * time.Second)
 
@@ -423,7 +425,7 @@ func (t *Txt2img) runRemote() ([]byte, error) {
 		return []byte{}, fmt.Errorf("fail to create request: %v", err)
 	}
 
-	req.Header.Add("Authorization", fmt.Sprintf("Token %s", config.TOKEN))
+	req.Header.Add("Authorization", fmt.Sprintf("Token %s", config.REPLICATE_TOKEN))
 
 	res, err = client.Do(req)
 
