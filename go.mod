@@ -1,10 +1,10 @@
 module scristobal/botatobot
 
-go 1.18
+go 1.21
 
 require (
-	github.com/go-telegram/bot v0.2.2
-	github.com/google/uuid v1.3.0
-	github.com/joho/godotenv v1.4.0
-	golang.org/x/exp v0.0.0-20220827204233-334a2380cb91
+	github.com/go-telegram/bot v0.8.2
+	github.com/google/uuid v1.4.0
+	github.com/joho/godotenv v1.5.1
+	golang.org/x/exp v0.0.0-20231110203233-9a3e6036ecaa
 )

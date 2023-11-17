@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"log"
-	"math/rand"
 	"net/http"
 	"os"
 	"os/signal"
@@ -12,14 +11,11 @@ import (
 	"scristobal/botatobot/pkg/commands"
 	"scristobal/botatobot/pkg/handlers"
 	"scristobal/botatobot/pkg/server"
-	"time"
 
 	"github.com/go-telegram/bot"
 )
 
 func main() {
-
-	rand.Seed(time.Now().UnixNano())
 
 	if err := config.FromEnv(); err != nil {
 		log.Fatalf("Error loading configuration: %v", err)
@@ -27,7 +23,11 @@ func main() {
 
 	queue := botatobot.NewQueue()
 
-	b := bot.New(config.BOT_TOKEN)
+	b, err := bot.New(config.BOT_TOKEN)
+
+	if err != nil {
+		log.Fatalf("Error creating bot: %v", err)
+	}
 
 	b.RegisterHandler(bot.HandlerTypeMessageText, string(commands.Generate), bot.MatchTypePrefix, handlers.Generate(&queue))
 	b.RegisterHandler(bot.HandlerTypeMessageText, string(commands.Status), bot.MatchTypePrefix, handlers.Status(&queue))
