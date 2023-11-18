@@ -35,7 +35,7 @@ func (r *Request) Result() ([]byte, error) {
 }
 
 func (r *Request) String() string {
-	return fmt.Sprintf("request %s with parameters: %s, running %s", r.Id, &r.Task)
+	return fmt.Sprintf("request %s with parameters: %s", r.Id, &r.Task)
 }
 
 func (r *Request) SaveToDisk() error {
