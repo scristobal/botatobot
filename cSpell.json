@@ -1,0 +1,19 @@
+{
+    "dictionaries": [],
+    "dictionaryDefinitions": [],
+    "ignorePaths": [],
+    "ignoreWords": [],
+    "import": [
+        "@cspell/dict-python/cspell-ext.json"
+    ],
+    "version": "0.2",
+    "words": [
+        "Botatobot",
+        "Botatoide",
+        "godotenv",
+        "joho",
+        "newbot",
+        "showme",
+        "telegrambot"
+    ]
+}
