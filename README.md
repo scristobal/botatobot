@@ -77,7 +77,7 @@ There is an optional variable `OUTPUT_PATH` that indicates the path where the ge
 
 ##### If using replicate.com
 
-If using replicate.com you need the token, the version and their url. Add the following to your `.env` file.
+You need the Telegram and Replicate tokens and the Stable Diffusion model version, create an `.env` file or make them available in the environment.
 
 ```text
 BOT_TOKEN=123456789:ABCDEF1234567890ABCDEF1234567890ABC
@@ -85,7 +85,7 @@ REPLICATE_TOKEN=1234567890abdfeghijklmnopqrstuvwxyz
 REPLICATE_VERSION=a9758cbfbd5f3c2094457d996681af52552901775aa2d6dd0b17fd15df959bef
 ```
 
-The `BOT_TOKEN` you got from the [@BotFather](https://t.me/BotFather), the variable `OUTPUT_PATH` is optional, and indicates the path where the generated images will be saved, `REPLICATE_TOKEN` and `REPLICATE_VERSION` you get from replicate.com.
+The `BOT_TOKEN` you got from the [@BotFather](https://t.me/BotFather),`REPLICATE_TOKEN` and `REPLICATE_VERSION` you get from replicate.com.
 
 Additionally you can set `REPLICATE_URL` to a custom url, and `OUTPUT_PATH` to indicate the path where the generated images will be saved.
 
