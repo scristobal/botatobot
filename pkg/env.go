@@ -9,9 +9,8 @@ import (
 )
 
 var (
-	RUN_LOCAL         string
-	PORT              string
-	BOT_TOKEN         string
+	LOCAL_PORT        string
+	TELEGRAMBOT_TOKEN string
 	MODEL_URL         string
 	OUTPUT_PATH       string
 	REPLICATE_URL     string
@@ -27,68 +26,53 @@ func FromEnv() error {
 	var ok bool
 
 	if err != nil {
-		log.Println("Failed to load .env file, fallback on env vars")
+		log.Println("No .env file found, using environment variables instead.")
 	}
 
-	PORT, ok = os.LookupEnv("PORT")
+	LOCAL_PORT, ok = os.LookupEnv("LOCAL_PORT")
 
 	if !ok {
-		log.Println("PORT not found, using default 8080")
-		PORT = "8080"
+		log.Println("LOCAL_PORT not found, health http rest will not start.")
 	}
 
-	BOT_TOKEN, ok = os.LookupEnv("BOT_TOKEN")
+	TELEGRAMBOT_TOKEN, ok = os.LookupEnv("BOT_TOKEN")
 
 	if !ok {
-		return fmt.Errorf("BOT_TOKEN not found")
+		return fmt.Errorf("BOT_TOKEN not found. Talk to @botfather in Telegram and get one")
 	}
 
 	OUTPUT_PATH, ok = os.LookupEnv("OUTPUT_PATH")
 
 	if !ok {
-		log.Println("OUTPUT_PATH not found, files will not be saved locally")
+		log.Println("OUTPUT_PATH not found, files will not be saved locally.")
 	}
 
-	RUN_LOCAL, ok = os.LookupEnv("RUN_LOCAL")
+	MODEL_URL, ok = os.LookupEnv("MODEL_URL")
+
+	if ok {
+		return nil
+	}
+
+	log.Println("MODEL_URL not found, loading replicate.com config.")
+
+	REPLICATE_URL, ok = os.LookupEnv("REPLICATE_URL")
 
 	if !ok {
-		RUN_LOCAL = "false"
-		log.Printf("RUN_LOCAL not found, assuming it is %s\n", RUN_LOCAL)
+		REPLICATE_URL = "https://api.replicate.com/v1/predictions"
+		log.Printf("REPLICATE_URL not found, using default %s\n", REPLICATE_URL)
+
 	}
 
-	if RUN_LOCAL == "true" {
+	REPLICATE_TOKEN, ok = os.LookupEnv("REPLICATE_TOKEN")
 
-		log.Println("RUN_LOCAL=true, using local model")
+	if !ok {
+		return fmt.Errorf("REPLICATE_TOKEN not found, get a token or set RUN_LOCAL=true and use your own image generator")
+	}
 
-		MODEL_URL, ok = os.LookupEnv("MODEL_URL")
+	REPLICATE_VERSION, ok = os.LookupEnv("REPLICATE_VERSION")
 
-		if !ok {
-			return fmt.Errorf("MODEL_URL not found")
-		}
-
-	} else {
-
-		log.Println("RUN_LOCAL=false, using replicate.com as image generator.")
-
-		REPLICATE_URL, ok = os.LookupEnv("REPLICATE_URL")
-
-		if !ok {
-			REPLICATE_URL = "https://api.replicate.com/v1/predictions"
-			log.Printf("REPLICATE_URL not found, using default %s\n", REPLICATE_URL)
-
-		}
-
-		REPLICATE_TOKEN, ok = os.LookupEnv("REPLICATE_TOKEN")
-
-		if !ok {
-			return fmt.Errorf("REPLICATE_TOKEN not found, get a token or set RUN_LOCAL=true and use your own image generator")
-		}
-
-		REPLICATE_VERSION, ok = os.LookupEnv("REPLICATE_VERSION")
-
-		if !ok {
-			return fmt.Errorf("REPLICATE_VERSION not found, go to replicate.com and choose a model version")
-		}
+	if !ok {
+		return fmt.Errorf("REPLICATE_VERSION not found, go to replicate.com and choose a model version")
 	}
 
 	return nil

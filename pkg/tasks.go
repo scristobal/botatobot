@@ -241,7 +241,7 @@ func (t *Task) String() string {
 
 func (t *Task) Execute() ([]byte, error) {
 
-	if RUN_LOCAL == "true" {
+	if MODEL_URL != "" {
 		return t.runLocal()
 	}
 

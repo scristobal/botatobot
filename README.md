@@ -67,13 +67,13 @@ The token looks like this: `123456789:ABCDEF1234567890ABCDEF1234567890ABC`
 Set the following environment variables or create a `.env` file with the following content:
 
 ```text
-RUN_LOCAL=true
-BOT_TOKEN=123456789:ABCDEF1234567890ABCDEF1234567890ABC
-OUTPUT_PATH=/home/user/pictures
+TELEGRAMBOT_TOKEN=123456789:ABCDEF1234567890ABCDEF1234567890ABC
 MODEL_URL=http://127.0.0.1:5001/predictions
 ```
 
-The `BOT_TOKEN` you got from the [@BotFather](https://t.me/BotFather), the variable `OUTPUT_PATH` is optional, and indicates the path where the generated images will be saved, and `MODEL_URL` indicates where the Cog Stable Diffusion is running, most likely a docker container in your local machine.
+The `BOT_TOKEN` you got from the [@BotFather](https://t.me/BotFather), and `MODEL_URL` indicates where the Cog Stable Diffusion is running, most likely a docker container in your local machine.
+
+There is an optional variable `OUTPUT_PATH` that indicates the path where the generated images will be saved.
 
 ##### If using replicate.com
 
@@ -81,14 +81,13 @@ If using replicate.com you need the token, the version and their url. Add the fo
 
 ```text
 BOT_TOKEN=123456789:ABCDEF1234567890ABCDEF1234567890ABC
-OUTPUT_PATH=/home/user/pictures
 REPLICATE_TOKEN=1234567890abdfeghijklmnopqrstuvwxyz
 REPLICATE_VERSION=a9758cbfbd5f3c2094457d996681af52552901775aa2d6dd0b17fd15df959bef
 ```
 
 The `BOT_TOKEN` you got from the [@BotFather](https://t.me/BotFather), the variable `OUTPUT_PATH` is optional, and indicates the path where the generated images will be saved, `REPLICATE_TOKEN` and `REPLICATE_VERSION` you get from replicate.com.
 
-Additionally you can set `REPLICATE_URL` to a custom url.
+Additionally you can set `REPLICATE_URL` to a custom url, and `OUTPUT_PATH` to indicate the path where the generated images will be saved.
 
 #### Build and run
 
@@ -97,6 +96,10 @@ Build with`go build -o build/botatobot cmd/botatobot/main.go` and then run `./bu
 ## Usage
 
 Tell the bot `/help` to let him self explain.
+
+## Notes
+
+In some scenarios, like deploying to Heroku or other platforms you need a http rest health endpoint. Botatobot includes such functionality, to activate it include a `LOCAL_PORT` variable.
 
 ## Acknowledgments
 

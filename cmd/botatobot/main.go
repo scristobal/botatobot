@@ -18,7 +18,7 @@ func main() {
 
 	queue := pkg.NewQueue()
 
-	bot, err := telegrambot.New(pkg.BOT_TOKEN)
+	bot, err := telegrambot.New(pkg.TELEGRAMBOT_TOKEN)
 
 	if err != nil {
 		log.Fatalf("Error creating bot: %v", err)

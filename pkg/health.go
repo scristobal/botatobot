@@ -9,7 +9,7 @@ import (
 func Http(handler func(w http.ResponseWriter, r *http.Request)) {
 
 	s := http.Server{
-		Addr:         fmt.Sprintf(":%s", PORT),
+		Addr:         fmt.Sprintf(":%s", LOCAL_PORT),
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 90 * time.Second,
 		IdleTimeout:  120 * time.Second,
