@@ -16,7 +16,6 @@ type Request struct {
 	Msg    *models.Message `json:"msg"`
 	Output []byte          `json:"-"`
 	Err    error           `json:"error,omitempty"`
-	Env    string          `json:"env"`
 }
 
 func (r *Request) GetIdentifier() uuid.UUID {
@@ -28,7 +27,7 @@ func (r *Request) GetMessage() *models.Message {
 }
 
 func (r *Request) Launch() {
-	r.Output, r.Err = r.Task.Execute(r.Env)
+	r.Output, r.Err = r.Task.Execute()
 }
 
 func (r *Request) Result() ([]byte, error) {
@@ -36,7 +35,7 @@ func (r *Request) Result() ([]byte, error) {
 }
 
 func (r *Request) String() string {
-	return fmt.Sprintf("request %s with parameters: %s, running %s", r.Id, &r.Task, r.Env)
+	return fmt.Sprintf("request %s with parameters: %s, running %s", r.Id, &r.Task)
 }
 
 func (r *Request) SaveToDisk() error {

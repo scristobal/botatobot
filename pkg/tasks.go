@@ -239,13 +239,9 @@ func (t *Task) String() string {
 	return res
 }
 
-func (t *Task) Execute(env string) ([]byte, error) {
+func (t *Task) Execute() ([]byte, error) {
 
-	if env != "local" && env != "remote" {
-		return nil, fmt.Errorf("invalid environment, should be local or remote")
-	}
-
-	if env == "local" {
+	if RUN_LOCAL == "true" {
 		return t.runLocal()
 	}
 

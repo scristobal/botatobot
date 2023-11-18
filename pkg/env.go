@@ -9,6 +9,7 @@ import (
 )
 
 var (
+	RUN_LOCAL         string
 	PORT              string
 	BOT_TOKEN         string
 	MODEL_URL         string
@@ -48,10 +49,11 @@ func FromEnv() error {
 		log.Println("OUTPUT_PATH not found, files will not be saved locally")
 	}
 
-	RUN_LOCAL, ok := os.LookupEnv("RUN_LOCAL")
+	RUN_LOCAL, ok = os.LookupEnv("RUN_LOCAL")
 
 	if !ok {
-		log.Println("RUN_LOCAL not found, assuming it is false.")
+		RUN_LOCAL = "false"
+		log.Printf("RUN_LOCAL not found, assuming it is %s\n", RUN_LOCAL)
 	}
 
 	if RUN_LOCAL == "true" {
