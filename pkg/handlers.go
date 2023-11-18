@@ -1,19 +1,16 @@
-package handlers
+package botatobot
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"log"
+	"path/filepath"
 
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
+	"github.com/google/uuid"
 )
-
-type queue interface {
-	Push(item *models.Message) error
-	Len() int
-	IsWorking() bool
-}
 
 func getMessageOrUpdate(update *models.Update) (*models.Message, error) {
 
@@ -36,7 +33,46 @@ func getMessageOrUpdate(update *models.Update) (*models.Message, error) {
 	return &models.Message{}, fmt.Errorf("no message found in update")
 }
 
-func Status(q queue) bot.HandlerFunc {
+type Outcome interface {
+	GetMessage() *models.Message
+	GetIdentifier() uuid.UUID
+	GetDescription() string
+	Result() ([]byte, error)
+}
+
+func SendOutcome(ctx context.Context, b *bot.Bot) func(req Outcome) error {
+	return func(req Outcome) error {
+
+		message := req.GetMessage()
+
+		res, err := req.Result()
+
+		if err != nil {
+
+			_, err := b.SendMessage(ctx, &bot.SendMessageParams{
+				ChatID:           message.Chat.ID,
+				Text:             fmt.Sprintf("Sorry, but something went wrong 😭 %s", err),
+				ReplyToMessageID: message.ID,
+			})
+
+			return err
+		}
+
+		_, err = b.SendPhoto(ctx, &bot.SendPhotoParams{
+			ChatID:  message.Chat.ID,
+			Caption: fmt.Sprint(req.GetDescription()),
+			Photo: &models.InputFileUpload{
+				Data:     bytes.NewReader(res),
+				Filename: filepath.Base(fmt.Sprintf("%s.png", req.GetIdentifier())),
+			},
+			DisableNotification: true,
+		})
+
+		return err
+	}
+}
+
+func Status(q Queue) bot.HandlerFunc {
 
 	return func(ctx context.Context, b *bot.Bot, update *models.Update) {
 
@@ -82,7 +118,7 @@ func Status(q queue) bot.HandlerFunc {
 	}
 }
 
-func Generate(q queue) bot.HandlerFunc {
+func Generate(q Queue) bot.HandlerFunc {
 
 	return func(ctx context.Context, b *bot.Bot, update *models.Update) {
 

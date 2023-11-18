@@ -3,50 +3,44 @@ package main
 import (
 	"context"
 	"log"
-	"net/http"
 	"os"
 	"os/signal"
-	"scristobal/botatobot/config"
-	botatobot "scristobal/botatobot/pkg"
-	"scristobal/botatobot/pkg/commands"
-	"scristobal/botatobot/pkg/handlers"
-	"scristobal/botatobot/pkg/server"
+	pkg "scristobal/botatobot/pkg"
 
-	"github.com/go-telegram/bot"
+	telegrambot "github.com/go-telegram/bot"
 )
 
 func main() {
 
-	if err := config.FromEnv(); err != nil {
+	if err := pkg.FromEnv(); err != nil {
 		log.Fatalf("Error loading configuration: %v", err)
 	}
 
-	queue := botatobot.NewQueue()
+	queue := pkg.NewQueue()
 
-	b, err := bot.New(config.BOT_TOKEN)
+	bot, err := telegrambot.New(pkg.BOT_TOKEN)
 
 	if err != nil {
 		log.Fatalf("Error creating bot: %v", err)
 	}
 
-	b.RegisterHandler(bot.HandlerTypeMessageText, string(commands.Generate), bot.MatchTypePrefix, handlers.Generate(&queue))
-	b.RegisterHandler(bot.HandlerTypeMessageText, string(commands.Status), bot.MatchTypePrefix, handlers.Status(&queue))
-	b.RegisterHandler(bot.HandlerTypeMessageText, string(commands.Help), bot.MatchTypePrefix, handlers.Help())
+	bot.RegisterHandler(telegrambot.HandlerTypeMessageText, string(pkg.GenerateCmd), telegrambot.MatchTypePrefix, pkg.Generate(queue))
+	bot.RegisterHandler(telegrambot.HandlerTypeMessageText, string(pkg.StatusCmd), telegrambot.MatchTypePrefix, pkg.Status(queue))
+	bot.RegisterHandler(telegrambot.HandlerTypeMessageText, string(pkg.HelpCmd), telegrambot.MatchTypePrefix, pkg.Help())
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
-	queue.SetCallback(botatobot.SendOutcome(ctx, b))
+	callback := pkg.SendOutcome(ctx, bot)
+
+	queue.SetCallback(callback)
 
 	go queue.Start(ctx)
-	go b.Start(ctx)
+	go bot.Start(ctx)
 
 	log.Println("Bot online, listening to messages...")
 
-	go server.Http(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
-	})
+	go pkg.Start_health()
 
 	<-ctx.Done()
 }

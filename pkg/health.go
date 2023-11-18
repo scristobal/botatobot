@@ -1,6 +1,7 @@
-package server
+package botatobot
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 )
@@ -8,7 +9,7 @@ import (
 func Http(handler func(w http.ResponseWriter, r *http.Request)) {
 
 	s := http.Server{
-		Addr:         ":8080",
+		Addr:         fmt.Sprintf(":%s", PORT),
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 90 * time.Second,
 		IdleTimeout:  120 * time.Second,
@@ -27,4 +28,11 @@ func Http(handler func(w http.ResponseWriter, r *http.Request)) {
 			panic(err)
 		}
 	}
+}
+
+func Start_health() {
+	Http(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	})
 }

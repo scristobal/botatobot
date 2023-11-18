@@ -8,7 +8,6 @@ import (
 	"math/rand"
 	"net/http"
 	"regexp"
-	"scristobal/botatobot/config"
 	"strconv"
 	"strings"
 	"time"
@@ -16,7 +15,7 @@ import (
 	"golang.org/x/exp/utf8string"
 )
 
-type Txt2img struct {
+type Task struct {
 	Prompt              string  `json:"prompt"`
 	Seed                int     `json:"seed,omitempty"`
 	Num_inference_steps int     `json:"num_inference_steps,omitempty"`
@@ -136,9 +135,9 @@ func getPrompt(s string) (string, error) {
 
 }
 
-func buildConfig(prompt string, params map[string]string) (Txt2img, error) {
+func buildConfig(prompt string, params map[string]string) (Task, error) {
 
-	config := Txt2img{
+	config := Task{
 		Prompt:              prompt,
 		Num_inference_steps: 50,
 		Guidance_scale:      7.5,
@@ -185,7 +184,7 @@ func buildConfig(prompt string, params map[string]string) (Txt2img, error) {
 
 }
 
-func Txt2imgFromString(s string) ([]*Txt2img, error) {
+func TaskFromString(s string) ([]*Task, error) {
 
 	prompt, err := getPrompt(s)
 
@@ -202,23 +201,23 @@ func Txt2imgFromString(s string) ([]*Txt2img, error) {
 	params, err := buildConfig(prompt, userParams)
 
 	if err != nil {
-		return []*Txt2img{}, fmt.Errorf("invalid parameters, %s", err)
+		return []*Task{}, fmt.Errorf("invalid parameters, %s", err)
 	}
 
 	// special case, if no seed is provided we generate 5 images with different seeds
 	_, ok := userParams["&seed"]
 
 	if ok {
-		return []*Txt2img{&params}, nil
+		return []*Task{&params}, nil
 	}
 
-	jobs := make([]*Txt2img, 4)
+	jobs := make([]*Task, 1)
 
 	for i := 0; i < len(jobs); i++ {
 
 		seed := rand.Intn(1_000_00)
 
-		job := Txt2img{
+		job := Task{
 			Seed:                seed,
 			Prompt:              params.Prompt,
 			Num_inference_steps: params.Num_inference_steps,
@@ -232,7 +231,7 @@ func Txt2imgFromString(s string) ([]*Txt2img, error) {
 	return jobs, nil
 }
 
-func (t *Txt2img) String() string {
+func (t *Task) String() string {
 	res := fmt.Sprintf("%s &seed_%d &steps_%d &guidance_%1.f", t.Prompt, t.Seed, t.Num_inference_steps, t.Guidance_scale)
 
 	res = strings.TrimSpace(res)
@@ -240,7 +239,7 @@ func (t *Txt2img) String() string {
 	return res
 }
 
-func (t *Txt2img) Execute(env string) ([]byte, error) {
+func (t *Task) Execute(env string) ([]byte, error) {
 
 	if env != "local" && env != "remote" {
 		return nil, fmt.Errorf("invalid environment, should be local or remote")
@@ -254,14 +253,14 @@ func (t *Txt2img) Execute(env string) ([]byte, error) {
 
 }
 
-func (t *Txt2img) runLocal() ([]byte, error) {
+func (t *Task) runLocal() ([]byte, error) {
 	input, err := json.Marshal(t)
 
 	if err != nil {
 		return []byte{}, fmt.Errorf("fail to serialize job parameters: %v", err)
 	}
 
-	res, err := http.Post(config.MODEL_URL, "application/json", strings.NewReader(fmt.Sprintf(`{"input": %s}`, input)))
+	res, err := http.Post(MODEL_URL, "application/json", strings.NewReader(fmt.Sprintf(`{"input": %s}`, input)))
 
 	if err != nil {
 		return []byte{}, fmt.Errorf("failed to run the model: %s", err)
@@ -307,7 +306,7 @@ func (t *Txt2img) runLocal() ([]byte, error) {
 
 }
 
-func (t *Txt2img) runRemote() ([]byte, error) {
+func (t *Task) runRemote() ([]byte, error) {
 	input, err := json.Marshal(t)
 
 	if err != nil {
@@ -318,11 +317,11 @@ func (t *Txt2img) runRemote() ([]byte, error) {
 
 	// 1st request to launch job
 
-	version := config.REPLICATE_VERSION
+	version := REPLICATE_VERSION
 
 	reqBody := strings.NewReader(fmt.Sprintf(`{"version": "%s", "input": %s}`, version, input))
 
-	req, err := http.NewRequest("POST", config.MODEL_URL, reqBody)
+	req, err := http.NewRequest("POST", REPLICATE_URL, reqBody)
 
 	if err != nil {
 		return []byte{}, fmt.Errorf("fail to create request: %v", err)
@@ -330,7 +329,7 @@ func (t *Txt2img) runRemote() ([]byte, error) {
 
 	req.Header.Add("Content-Type", "application/json")
 
-	req.Header.Add("Authorization", fmt.Sprintf("Token %s", config.REPLICATE_TOKEN))
+	req.Header.Add("Authorization", fmt.Sprintf("Token %s", REPLICATE_TOKEN))
 
 	res, err := client.Do(req)
 
@@ -375,7 +374,7 @@ func (t *Txt2img) runRemote() ([]byte, error) {
 		return []byte{}, fmt.Errorf("fail to create request: %v", err)
 	}
 
-	req.Header.Add("Authorization", fmt.Sprintf("Token %s", config.REPLICATE_TOKEN))
+	req.Header.Add("Authorization", fmt.Sprintf("Token %s", REPLICATE_TOKEN))
 
 	time.Sleep(5 * time.Second)
 
@@ -425,7 +424,7 @@ func (t *Txt2img) runRemote() ([]byte, error) {
 		return []byte{}, fmt.Errorf("fail to create request: %v", err)
 	}
 
-	req.Header.Add("Authorization", fmt.Sprintf("Token %s", config.REPLICATE_TOKEN))
+	req.Header.Add("Authorization", fmt.Sprintf("Token %s", REPLICATE_TOKEN))
 
 	res, err = client.Do(req)
 

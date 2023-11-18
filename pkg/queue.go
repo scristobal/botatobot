@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net/url"
-	"scristobal/botatobot/config"
 
 	"github.com/go-telegram/bot/models"
 	"github.com/google/uuid"
@@ -16,14 +15,14 @@ type Queue struct {
 	current  *Request
 	pending  chan Request
 	done     chan Request
-	callback func(outcome) error
+	callback func(Outcome) error
 	ctx      *context.Context
 }
 
 func NewQueue() Queue {
 	requestGenerator := func(m models.Message) ([]Request, error) {
 
-		tasks, err := Txt2imgFromString(m.Text)
+		tasks, err := TaskFromString(m.Text)
 
 		if err != nil {
 			return nil, fmt.Errorf("failed to create request: %s", err)
@@ -31,7 +30,7 @@ func NewQueue() Queue {
 
 		var requests []Request
 
-		u, err := url.Parse(config.MODEL_URL)
+		u, err := url.Parse(MODEL_URL)
 
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse model url: %s", err)
@@ -53,8 +52,8 @@ func NewQueue() Queue {
 
 	return Queue{
 		factory: requestGenerator,
-		pending: make(chan Request, config.MAX_JOBS),
-		done:    make(chan Request, config.MAX_JOBS),
+		pending: make(chan Request, MAX_JOBS),
+		done:    make(chan Request, MAX_JOBS),
 	}
 }
 
@@ -66,7 +65,7 @@ func (q *Queue) Push(msg *models.Message) error {
 	}
 
 	for _, task := range tasks {
-		if len(q.pending) >= config.MAX_JOBS {
+		if len(q.pending) >= MAX_JOBS {
 			return fmt.Errorf("too many jobs")
 		}
 		q.pending <- task
@@ -133,6 +132,6 @@ func (q *Queue) Start(ctx context.Context) {
 	<-(*q.ctx).Done()
 }
 
-func (q *Queue) SetCallback(f func(outcome) error) {
+func (q *Queue) SetCallback(f func(Outcome) error) {
 	q.callback = f
 }
