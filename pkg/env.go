@@ -11,8 +11,6 @@ import (
 var (
 	LOCAL_PORT        string
 	TELEGRAMBOT_TOKEN string
-	MODEL_URL         string
-	OUTPUT_PATH       string
 	REPLICATE_URL     string
 	REPLICATE_TOKEN   string
 	REPLICATE_VERSION string
@@ -39,20 +37,6 @@ func FromEnv() error {
 		return fmt.Errorf("BOT_TOKEN not found. Talk to @botfather in Telegram and get one")
 	}
 
-	OUTPUT_PATH, ok = os.LookupEnv("OUTPUT_PATH")
-
-	if !ok {
-		log.Println("OUTPUT_PATH not found, files will not be saved locally.")
-	}
-
-	MODEL_URL, ok = os.LookupEnv("MODEL_URL")
-
-	if ok {
-		return nil
-	}
-
-	log.Println("MODEL_URL not found, loading replicate.com config.")
-
 	REPLICATE_URL, ok = os.LookupEnv("REPLICATE_URL")
 
 	if !ok {
@@ -70,7 +54,8 @@ func FromEnv() error {
 	REPLICATE_VERSION, ok = os.LookupEnv("REPLICATE_VERSION")
 
 	if !ok {
-		return fmt.Errorf("REPLICATE_VERSION not found, go to replicate.com and choose a model version")
+		REPLICATE_VERSION = "39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b"
+		log.Printf("REPLICATE_VERSION not found, using default %s\n", REPLICATE_VERSION)
 	}
 
 	return nil

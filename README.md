@@ -6,100 +6,89 @@ Yet another Telegram bot, this one generates stable diffusion images on request.
 
 ## Yes, but how?
 
-In a nutshell, Botatobot listen for users requests for images and push them in a (bounded) worker queue, the queue gets processed by a server running a Stable Diffusion inside a  either locally or as a service, like replicate.com
+In a nutshell, Botatobot listens for user requests for images and forwards those request towards a image generator cloud service, waits for the response and sends it back to user.
 
 ## Pre-requisites
 
-To run Stable Diffusion, you have two options:
+Botatobot works out of the box in combination with [Replicate.com](https://www.replicate.com), [Telegram](https://www.telegram.com) and [fly.io](https://fly.io/).
 
-- Locally, using a [Cog Container](https://github.com/replicate/cog).
-- Remotely, using [Replicate.com](https://www.replicate.com).
+## Configure and run Botatobot 🥔
 
-To run the Telegram bot server you need [Go](https://go.dev/doc/install) and a [Telegram](https://www.telegram.com) account.
-
-### Host a Cog Stable Diffusion server on your machine 🐳
-
-First you need to [install Cog](https://github.com/replicate/cog?tab=readme-ov-file#install), [Docker](https://docs.docker.com/get-docker/) and the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html).
-
-Then clone the pre-configured [cog-stable-diffusion](https://github.com/replicate/cog-stable-diffusion) repository. Follow their instructions in the README to ensure the model is running correctly.
-
-In particular you need to download the weights first
-
-```bash
-cog run script/download-weights
-```
-
-build your container with
-
-```bash
-cog build -t stable-diffusion
-```
-
-and run it with
-
-```bash
-docker run -d -p 5001:5000 --gpus all stable-diffusion
-```
-
-This will download, create and run a container with the stable diffusion image running on port 5001, eg.`http://127.0.0.1:5001/predictions`
-
-### Getting a Replicate.com token and model version
-
-Go to [Replicate.com api-tokens](https://replicate.com/signin?next=/account/api-tokens) and generate your token, keep it safe.
-
-You will also need to choose a Stable Diffusion model version. You can find the available versions here <https://replicate.com/stability-ai/stable-diffusion/versions>
-
-### Getting a Telegram bot token 🤖
-
-1. Talk to [@BotFather](https://t.me/BotFather) on Telegram
-2. Send `/newbot` to create a new bot
-3. Follow the instructions to set a name and username for your bot
-4. Copy the token that BotFather gives you
-
-The token looks like this: `123456789:ABCDEF1234567890ABCDEF1234567890ABC`
-
-### Configure and run Botatobot 🥔
-
-#### Configure
-
-##### If running Stable Diffusion locally
-
-Set the following environment variables or create a `.env` file with the following content:
-
-```text
-TELEGRAMBOT_TOKEN=123456789:ABCDEF1234567890ABCDEF1234567890ABC
-MODEL_URL=http://127.0.0.1:5001/predictions
-```
-
-The `BOT_TOKEN` you got from the [@BotFather](https://t.me/BotFather), and `MODEL_URL` indicates where the Cog Stable Diffusion is running, most likely a docker container in your local machine.
-
-There is an optional variable `OUTPUT_PATH` that indicates the path where the generated images will be saved.
-
-##### If using replicate.com
-
-You need the Telegram and Replicate tokens and the Stable Diffusion model version, create an `.env` file or make them available in the environment.
+Create an `.env` file like so:
 
 ```text
 BOT_TOKEN=123456789:ABCDEF1234567890ABCDEF1234567890ABC
 REPLICATE_TOKEN=1234567890abdfeghijklmnopqrstuvwxyz
-REPLICATE_VERSION=a9758cbfbd5f3c2094457d996681af52552901775aa2d6dd0b17fd15df959bef
 ```
 
-The `BOT_TOKEN` you got from the [@BotFather](https://t.me/BotFather),`REPLICATE_TOKEN` and `REPLICATE_VERSION` you get from replicate.com.
+The `BOT_TOKEN` you got from the [@BotFather](https://t.me/BotFather), `REPLICATE_TOKEN` you get from [Replicate.com api-tokens](https://replicate.com/signin?next=/account/api-tokens)
 
-Additionally you can set `REPLICATE_URL` to a custom url, and `OUTPUT_PATH` to indicate the path where the generated images will be saved.
+### Running Botatobot using Docker
 
-#### Build and run
+Build the docker image with
 
-Build with`go build -o build/botatobot cmd/botatobot/main.go` and then run `./build/botatobot`
+```bash
+docker build .  -t botatobot
+```
 
-## Usage
+and then launch it with
 
-Tell the bot `/help` to let him self explain.
+```bash
+docker run --env-file .env  botatobot
+```
 
-## Notes
+As long as the container is running the bot will answer to requests. To make it available 24/7 you need to deploy to a hosted service.
 
-In some scenarios, like deploying to Heroku or other platforms you need a http rest health endpoint. Botatobot includes such functionality, to activate it include a `LOCAL_PORT` variable.
+## Deploy Botatobot
+
+If you want to deploy Botatobot you need a [fly.io](https://fly.io/) account. Create the account and [install the CLI](https://fly.io/docs/hands-on/install-flyctl/). Then simply run
+
+```bash
+fly launch
+```
+
+to create your deployment follow by
+
+```bash
+fly secrets set BOT_TOKEN=123456789:ABCDEF1234567890ABCDEF1234567890ABC
+fly secrets set REPLICATE_TOKEN=1234567890abdfeghijklmnopqrstuvwxyz
+```
+
+and finally
+
+```bash
+fly deploy
+```
+
+## Bonus
+
+### Change the model and version
+
+The model version is controlled by `REPLICATE_VERSION` environment variable.
+
+### Run locally w/o Docker
+
+If you have Go 1.21+ you can build the project with
+
+```bash
+go build -o build/botatobot cmd/botatobot/main.go
+```
+
+and then run
+
+```bash
+./build/botatobot
+```
+
+### Build and run using Just
+
+If you have Go 1.21+ and [Just](https://just.systems/) you can use
+
+```bash
+just -l
+```
+
+to check the available commands.
 
 ## Acknowledgments
 

@@ -1,0 +1,5 @@
+.env
+cSpell.json
+Dockerfile
+justfile
+README
