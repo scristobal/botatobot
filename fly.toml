@@ -1,0 +1,21 @@
+# fly.toml app configuration file generated for botatobot on 2023-11-19T17:03:52+01:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = "botatobot"
+primary_region = "mad"
+
+[build]
+
+[http_service]
+internal_port = 8080
+force_https = true
+auto_stop_machines = true
+auto_start_machines = true
+min_machines_running = 0
+processes = ["app"]
+
+[env]
+LOCAL_PORT = "8080"
+REPLICATE_VERSION = "39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b"
