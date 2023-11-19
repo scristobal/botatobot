@@ -31,6 +31,11 @@ func GenerateHandler(ctx context.Context, b *bot.Bot, update *models.Update) {
 		return
 	}
 
+	b.SendChatAction(ctx, &bot.SendChatActionParams{
+		ChatID: message.Chat.ID,
+		Action: "typing",
+	})
+
 	// prompt is message.Text after removing the command
 	prompt := message.Text[(len(GenerateCommand) + 1):]
 	prompt = strings.TrimSpace(prompt)
@@ -57,6 +62,11 @@ func GenerateHandler(ctx context.Context, b *bot.Bot, update *models.Update) {
 		return
 	}
 
+	b.SendChatAction(ctx, &bot.SendChatActionParams{
+		ChatID: message.Chat.ID,
+		Action: "upload_photo",
+	})
+
 	inputMedia := make([]models.InputMedia, 0, len(output))
 
 	for _, image := range output {
@@ -76,24 +86,4 @@ func GenerateHandler(ctx context.Context, b *bot.Bot, update *models.Update) {
 	if err != nil {
 		log.Printf("Error sending photo: %s", err)
 	}
-}
-
-func HelpHandler(ctx context.Context, b *bot.Bot, update *models.Update) {
-
-	if update == nil {
-		log.Println("empty update")
-		return
-	}
-
-	message := update.Message
-
-	if message == nil {
-		log.Println("empty message")
-		return
-	}
-
-	b.SendMessage(ctx, &bot.SendMessageParams{
-		ChatID: message.Chat.ID,
-		Text:   "Hi! I'm a 🤖 that generates images from text. Use the /generate command follow by a prompt, like this: \n\n   /generate a cat in space \n\nHave fun!",
-	})
 }
