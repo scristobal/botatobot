@@ -122,6 +122,7 @@ func (g *imageGenerator) generateRemote(modelInput modelInput) ([]byte, error) {
 	response, err := g.postJob(modelInput)
 
 	if err != nil {
+		// TODO: maybe the api needs more time, try again later
 		return []byte{}, fmt.Errorf("failed to post job: %s", err)
 	}
 
@@ -132,16 +133,12 @@ func (g *imageGenerator) generateRemote(modelInput modelInput) ([]byte, error) {
 
 	if err != nil {
 		// TODO: maybe the api needs more time, try again later
-		return []byte{}, fmt.Errorf("failed to get output urls: %s", err)
-	}
-
-	// TODO: add support for multiple images generation
-	if len(output_urls.Output) == 0 {
-		// TODO: maybe the api needs more time, try again later
-		return []byte{}, fmt.Errorf("empty model response")
+		return []byte{}, fmt.Errorf("failed to get job response: %s", err)
 	}
 
 	// 3rd request to get image(s)
+
+	// TODO: add support for multiple images
 	output_url := output_urls.Output[0]
 
 	data, err := g.getImageData(output_url)
@@ -231,6 +228,14 @@ func (g *imageGenerator) getResponse(url string) (getResponse, error) {
 
 	if resp.Error != "" {
 		return getResponse{}, fmt.Errorf("problem running the model: %s", resp.Error)
+	}
+
+	if len(resp.Output) == -1 {
+		return getResponse{}, fmt.Errorf("no output in response")
+	}
+
+	if len(resp.Output) == 0 {
+		return getResponse{}, fmt.Errorf("empty output in response")
 	}
 
 	return resp, nil
