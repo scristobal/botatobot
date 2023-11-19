@@ -16,26 +16,18 @@ func main() {
 		log.Fatalf("Error loading configuration: %v", err)
 	}
 
-	queue := pkg.NewQueue()
-
 	bot, err := telegrambot.New(pkg.TELEGRAMBOT_TOKEN)
 
 	if err != nil {
 		log.Fatalf("Error creating bot: %v", err)
 	}
 
-	bot.RegisterHandler(telegrambot.HandlerTypeMessageText, string(pkg.GenerateCmd), telegrambot.MatchTypePrefix, pkg.Generate(queue))
-	bot.RegisterHandler(telegrambot.HandlerTypeMessageText, string(pkg.StatusCmd), telegrambot.MatchTypePrefix, pkg.Status(queue))
-	bot.RegisterHandler(telegrambot.HandlerTypeMessageText, string(pkg.HelpCmd), telegrambot.MatchTypePrefix, pkg.Help())
+	bot.RegisterHandler(telegrambot.HandlerTypeMessageText, string(pkg.GenerateCmd), telegrambot.MatchTypePrefix, pkg.GenerateHandler)
+	bot.RegisterHandler(telegrambot.HandlerTypeMessageText, string(pkg.HelpCmd), telegrambot.MatchTypePrefix, pkg.HelpHandler)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
-	callback := pkg.SendOutcome(ctx, bot)
-
-	queue.SetCallback(callback)
-
-	go queue.Start(ctx)
 	go bot.Start(ctx)
 
 	log.Println("Bot online, listening to messages...")
