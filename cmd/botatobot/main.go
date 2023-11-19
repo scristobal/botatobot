@@ -5,9 +5,9 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	pkg "scristobal/botatobot/pkg"
+	"scristobal/botatobot/pkg"
 
-	telegrambot "github.com/go-telegram/bot"
+	"github.com/go-telegram/bot"
 )
 
 func main() {
@@ -16,31 +16,29 @@ func main() {
 		log.Fatalf("Error loading configuration: %v", err)
 	}
 
-	queue := pkg.NewQueue()
-
-	bot, err := telegrambot.New(pkg.TELEGRAMBOT_TOKEN)
+	botato, err := bot.New(pkg.TELEGRAMBOT_TOKEN)
 
 	if err != nil {
 		log.Fatalf("Error creating bot: %v", err)
 	}
 
-	bot.RegisterHandler(telegrambot.HandlerTypeMessageText, string(pkg.GenerateCmd), telegrambot.MatchTypePrefix, pkg.Generate(queue))
-	bot.RegisterHandler(telegrambot.HandlerTypeMessageText, string(pkg.StatusCmd), telegrambot.MatchTypePrefix, pkg.Status(queue))
-	bot.RegisterHandler(telegrambot.HandlerTypeMessageText, string(pkg.HelpCmd), telegrambot.MatchTypePrefix, pkg.Help())
+	botato.RegisterHandler(bot.HandlerTypeMessageText, string(pkg.GenerateCommand), bot.MatchTypePrefix, pkg.GenerateHandler)
+	botato.RegisterHandler(bot.HandlerTypeMessageText, string(pkg.HelpCommand), bot.MatchTypePrefix, pkg.HelpHandler)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
-	callback := pkg.SendOutcome(ctx, bot)
+	generator := pkg.NewImageGenerator()
+	ctx = context.WithValue(ctx, pkg.ImageGeneratorKey, generator)
 
-	queue.SetCallback(callback)
-
-	go queue.Start(ctx)
-	go bot.Start(ctx)
+	go botato.Start(ctx)
 
 	log.Println("Bot online, listening to messages...")
 
-	go pkg.Start_health()
+	if pkg.LOCAL_PORT != "" {
+		log.Printf("Starting health check server on port %s\n", pkg.LOCAL_PORT)
+		go pkg.StartHealthCheckServer()
+	}
 
 	<-ctx.Done()
 }
