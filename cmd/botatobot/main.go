@@ -32,7 +32,10 @@ func main() {
 
 	log.Println("Bot online, listening to messages...")
 
-	go pkg.Start_health()
+	if pkg.LOCAL_PORT != "" {
+		log.Printf("Starting health check server on port %s\n", pkg.LOCAL_PORT)
+		go pkg.Start_health()
+	}
 
 	<-ctx.Done()
 }

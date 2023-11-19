@@ -13,6 +13,13 @@ import (
 	"github.com/google/uuid"
 )
 
+type Command string
+
+const (
+	HelpCmd     Command = "/help"
+	GenerateCmd Command = "/generate"
+)
+
 func GenerateHandler(ctx context.Context, b *bot.Bot, update *models.Update) {
 
 	if update == nil {
