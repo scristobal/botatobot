@@ -1,4 +1,4 @@
-package botatobot
+package pkg
 
 import (
 	"bytes"
@@ -13,11 +13,11 @@ import (
 	"github.com/google/uuid"
 )
 
-type Command string
+type command string
 
 const (
-	HelpCmd     Command = "/help"
-	GenerateCmd Command = "/generate"
+	HelpCommand     command = "/help"
+	GenerateCommand command = "/generate"
 )
 
 func GenerateHandler(ctx context.Context, b *bot.Bot, update *models.Update) {
@@ -35,14 +35,16 @@ func GenerateHandler(ctx context.Context, b *bot.Bot, update *models.Update) {
 	}
 
 	// prompt is message.Text after removing the command
-	prompt := message.Text[(len(GenerateCmd) + 1):]
+	prompt := message.Text[(len(GenerateCommand) + 1):]
 	prompt = strings.TrimSpace(prompt)
 
 	// TODO: sanitize prompt
 
 	log.Printf("User `%s` requested `%s`\n", message.Chat.Username, prompt)
 
-	output, err := GenerateImage(prompt)
+	generator := ctx.Value(ImageGeneratorKey).(*imageGenerator)
+
+	output, err := generator.GenerateImageFromPrompt(prompt)
 
 	if err != nil {
 

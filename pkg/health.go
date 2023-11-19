@@ -1,4 +1,4 @@
-package botatobot
+package pkg
 
 import (
 	"fmt"
@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-func Http(handler func(w http.ResponseWriter, r *http.Request)) {
+func httpHealthServer(handler func(w http.ResponseWriter, r *http.Request)) {
 
 	s := http.Server{
 		Addr:         fmt.Sprintf(":%s", LOCAL_PORT),
@@ -30,8 +30,8 @@ func Http(handler func(w http.ResponseWriter, r *http.Request)) {
 	}
 }
 
-func Start_health() {
-	Http(func(w http.ResponseWriter, r *http.Request) {
+func StartHealthCheckServer() {
+	httpHealthServer(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
 	})

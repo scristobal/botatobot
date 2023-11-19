@@ -5,9 +5,9 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	pkg "scristobal/botatobot/pkg"
+	"scristobal/botatobot/pkg"
 
-	telegrambot "github.com/go-telegram/bot"
+	"github.com/go-telegram/bot"
 )
 
 func main() {
@@ -16,25 +16,28 @@ func main() {
 		log.Fatalf("Error loading configuration: %v", err)
 	}
 
-	bot, err := telegrambot.New(pkg.TELEGRAMBOT_TOKEN)
+	botato, err := bot.New(pkg.TELEGRAMBOT_TOKEN)
 
 	if err != nil {
 		log.Fatalf("Error creating bot: %v", err)
 	}
 
-	bot.RegisterHandler(telegrambot.HandlerTypeMessageText, string(pkg.GenerateCmd), telegrambot.MatchTypePrefix, pkg.GenerateHandler)
-	bot.RegisterHandler(telegrambot.HandlerTypeMessageText, string(pkg.HelpCmd), telegrambot.MatchTypePrefix, pkg.HelpHandler)
+	botato.RegisterHandler(bot.HandlerTypeMessageText, string(pkg.GenerateCommand), bot.MatchTypePrefix, pkg.GenerateHandler)
+	botato.RegisterHandler(bot.HandlerTypeMessageText, string(pkg.HelpCommand), bot.MatchTypePrefix, pkg.HelpHandler)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
-	go bot.Start(ctx)
+	generator := pkg.NewImageGenerator()
+	ctx = context.WithValue(ctx, pkg.ImageGeneratorKey, generator)
+
+	go botato.Start(ctx)
 
 	log.Println("Bot online, listening to messages...")
 
 	if pkg.LOCAL_PORT != "" {
 		log.Printf("Starting health check server on port %s\n", pkg.LOCAL_PORT)
-		go pkg.Start_health()
+		go pkg.StartHealthCheckServer()
 	}
 
 	<-ctx.Done()

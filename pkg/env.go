@@ -1,4 +1,4 @@
-package botatobot
+package pkg
 
 import (
 	"fmt"
@@ -17,8 +17,6 @@ var (
 	REPLICATE_TOKEN   string
 	REPLICATE_VERSION string
 )
-
-const MAX_JOBS = 20
 
 func FromEnv() error {
 	err := godotenv.Load()
