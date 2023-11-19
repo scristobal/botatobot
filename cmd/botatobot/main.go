@@ -8,6 +8,7 @@ import (
 	"scristobal/botatobot/pkg"
 
 	"github.com/go-telegram/bot"
+	"github.com/go-telegram/bot/models"
 )
 
 func main() {
@@ -23,13 +24,17 @@ func main() {
 	}
 
 	botato.RegisterHandler(bot.HandlerTypeMessageText, string(pkg.GenerateCommand), bot.MatchTypePrefix, pkg.GenerateHandler)
-	botato.RegisterHandler(bot.HandlerTypeMessageText, string(pkg.HelpCommand), bot.MatchTypePrefix, pkg.HelpHandler)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
 	generator := pkg.NewImageGenerator()
 	ctx = context.WithValue(ctx, pkg.ImageGeneratorKey, generator)
+
+	botato.SetMyCommands(ctx, &bot.SetMyCommandsParams{Commands: []models.BotCommand{{
+		Command:     string(pkg.GenerateCommand),
+		Description: "Generate an image from a prompt",
+	}}})
 
 	go botato.Start(ctx)
 
